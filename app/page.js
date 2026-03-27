@@ -179,96 +179,149 @@ function AuthScreen({ onAuth }) {
     setLoading(false);
   }
 
-  const assetTypes = [
-    { icon: '⚖', label: 'Precatórios' },
-    { icon: '🏢', label: 'Real Estate' },
-    { icon: '📊', label: 'Private Equity' },
-    { icon: '💳', label: 'Crédito' },
-    { icon: '🚀', label: 'Venture Capital' },
-    { icon: '📄', label: 'Documentos' },
+  const features = [
+    { icon: '⚖', title: 'Precatórios', desc: 'Controle completo do book com TIR, retorno e prazos automáticos' },
+    { icon: '🏢', title: 'Real Estate', desc: 'Imóveis, FIIs e participações imobiliárias em um só lugar' },
+    { icon: '📊', title: 'Private Equity & VC', desc: 'Acompanhe rodadas, valuations e documentos de investimento' },
+    { icon: '📁', title: 'Cofre Digital', desc: 'Contratos, escrituras e documentos com criptografia AES-256' },
   ];
 
   return (
-    <div style={{ ...S.authContainer, overflow: 'hidden', position: 'relative' }}>
-      {/* Background gradient orbs */}
-      <div style={{ position: 'absolute', top: '-20%', right: '-10%', width: 600, height: 600, borderRadius: '50%', background: 'radial-gradient(circle, rgba(201,151,91,0.06) 0%, transparent 70%)', pointerEvents: 'none' }} />
-      <div style={{ position: 'absolute', bottom: '-20%', left: '-10%', width: 500, height: 500, borderRadius: '50%', background: 'radial-gradient(circle, rgba(96,165,250,0.04) 0%, transparent 70%)', pointerEvents: 'none' }} />
-
-      {/* LEFT: Branding */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '60px 80px', position: 'relative' }}>
-        <div style={{ ...S.logoText, fontSize: 36, marginBottom: 4 }}>WealthOffice</div>
-        <div style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: '3px', textTransform: 'uppercase', fontWeight: 500, marginBottom: 48 }}>Escritório Digital de Ativos</div>
-
-        <h1 style={{ fontSize: 42, fontWeight: 700, lineHeight: 1.15, letterSpacing: '-0.03em', marginBottom: 20 }}>
-          Seu escritório digital para{' '}
-          <span style={{ background: 'linear-gradient(135deg, var(--accent), var(--accent-light))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-            ativos alternativos.
-          </span>
-        </h1>
-        <p style={{ fontSize: 16, color: 'var(--text-secondary)', lineHeight: 1.7, maxWidth: 480, marginBottom: 48 }}>
-          Controle precatórios, imóveis, private equity, crédito e venture capital em um único lugar. Documentos, contratos e análises — tudo seguro e organizado.
-        </p>
-
-        {/* Asset type badges */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 48 }}>
-          {assetTypes.map(a => (
-            <div key={a.label} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', borderRadius: 'var(--radius-xl)', background: 'var(--bg-card)', border: '1px solid var(--border)', fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500 }}>
-              <span>{a.icon}</span> {a.label}
-            </div>
-          ))}
+    <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', overflow: 'hidden' }}>
+      {/* ===== NAVBAR ===== */}
+      <nav style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 48px', position: 'relative', zIndex: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg, var(--accent), var(--accent-light))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 14, color: '#fff' }}>W</div>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>WealthOffice</div>
+            <div style={{ fontSize: 9, color: 'var(--text-muted)', letterSpacing: '1.5px', textTransform: 'uppercase' }}>Escritório Digital</div>
+          </div>
         </div>
+        <div style={{ display: 'flex', gap: 32, alignItems: 'center' }}>
+          <span style={{ fontSize: 13, color: 'var(--text-secondary)', cursor: 'pointer' }}>Sobre</span>
+          <span style={{ fontSize: 13, color: 'var(--text-secondary)', cursor: 'pointer' }}>Recursos</span>
+          <span style={{ fontSize: 13, color: 'var(--text-secondary)', cursor: 'pointer' }}>Contato</span>
+        </div>
+      </nav>
 
-        {/* Trust indicators */}
-        <div style={{ display: 'flex', gap: 36 }}>
-          <div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--gold)', fontVariantNumeric: 'tabular-nums' }}>AES-256</div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Criptografia militar</div>
+      {/* ===== HERO ===== */}
+      <div style={{ position: 'relative', padding: '40px 48px 80px' }}>
+        {/* Background decorations */}
+        <div style={{ position: 'absolute', top: -100, right: -100, width: 500, height: 500, borderRadius: '50%', background: 'radial-gradient(circle, rgba(46,158,110,0.08) 0%, transparent 70%)', pointerEvents: 'none' }} />
+        <div style={{ position: 'absolute', bottom: -200, left: '30%', width: 600, height: 600, borderRadius: '50%', background: 'radial-gradient(circle, rgba(46,158,110,0.04) 0%, transparent 70%)', pointerEvents: 'none' }} />
+        <div style={{ position: 'absolute', top: 60, left: '15%', width: 1, height: 120, background: 'linear-gradient(to bottom, transparent, rgba(46,158,110,0.2), transparent)', pointerEvents: 'none' }} />
+        <div style={{ position: 'absolute', top: 30, right: '25%', width: 1, height: 80, background: 'linear-gradient(to bottom, transparent, rgba(46,158,110,0.15), transparent)', pointerEvents: 'none' }} />
+
+        <div style={{ display: 'flex', gap: 60, alignItems: 'center', maxWidth: 1200, margin: '0 auto', position: 'relative' }}>
+          {/* LEFT: Content */}
+          <div style={{ flex: 1 }}>
+            <div style={{ display: 'inline-block', padding: '6px 16px', borderRadius: 20, background: 'var(--accent-dim)', border: '1px solid rgba(46,158,110,0.2)', fontSize: 12, fontWeight: 600, color: 'var(--accent-light)', marginBottom: 28, letterSpacing: '0.02em' }}>
+              Plataforma para investidores qualificados
+            </div>
+
+            <h1 style={{ fontSize: 48, fontWeight: 700, lineHeight: 1.1, letterSpacing: '-0.03em', marginBottom: 24, fontFamily: "'Playfair Display', serif" }}>
+              O escritório digital<br />dos seus{' '}
+              <span style={{ background: 'linear-gradient(135deg, var(--accent), var(--accent-light))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                ativos alternativos
+              </span>
+            </h1>
+
+            <p style={{ fontSize: 17, color: 'var(--text-secondary)', lineHeight: 1.75, maxWidth: 500, marginBottom: 36 }}>
+              Gerencie precatórios, imóveis, private equity e crédito estruturado. Documentos, contratos e análises financeiras — tudo em um único lugar seguro.
+            </p>
+
+            <div style={{ display: 'flex', gap: 12, marginBottom: 48 }}>
+              <button onClick={() => document.getElementById('auth-form')?.scrollIntoView({ behavior: 'smooth' })} style={{ ...S.btn('primary'), padding: '14px 32px', fontSize: 15, fontWeight: 700, borderRadius: 12 }}>
+                Começar agora
+              </button>
+              <button style={{ ...S.btn('default'), padding: '14px 28px', fontSize: 14, borderRadius: 12 }}>
+                Saiba mais
+              </button>
+            </div>
+
+            {/* Stats */}
+            <div style={{ display: 'flex', gap: 40 }}>
+              {[
+                { val: 'R$ 50M+', label: 'Em ativos gerenciados' },
+                { val: 'AES-256', label: 'Criptografia' },
+                { val: '99.9%', label: 'Uptime garantido' },
+              ].map(s => (
+                <div key={s.label}>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--accent)', fontFamily: "'Playfair Display', serif" }}>{s.val}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{s.label}</div>
+                </div>
+              ))}
+            </div>
           </div>
-          <div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)' }}>100%</div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Cloud seguro</div>
-          </div>
-          <div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)' }}>Multi-ativo</div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Plataforma integrada</div>
+
+          {/* RIGHT: Auth Card */}
+          <div id="auth-form" style={{ minWidth: 420 }}>
+            <div style={{ ...S.authCard, background: 'linear-gradient(145deg, var(--bg-card) 0%, var(--bg-secondary) 100%)', border: '1px solid var(--border-light)', position: 'relative', overflow: 'hidden' }} className="fade-in">
+              {/* Card accent line */}
+              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: 'linear-gradient(90deg, var(--accent), var(--accent-light), var(--accent))' }} />
+
+              <div style={{ ...S.authTitle, fontFamily: "'Playfair Display', serif", marginTop: 8 }}>{mode === 'login' ? 'Bem-vindo' : 'Criar conta'}</div>
+              <div style={S.authSub}>{mode === 'login' ? 'Acesse seu escritório digital de ativos' : 'Comece a organizar seus ativos alternativos'}</div>
+              <form onSubmit={handleSubmit}>
+                {mode === 'register' && (
+                  <div style={{ marginBottom: 18 }}>
+                    <label style={S.label}>Nome completo</label>
+                    <input style={S.input} type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Seu nome" required />
+                  </div>
+                )}
+                <div style={{ marginBottom: 18 }}>
+                  <label style={S.label}>E-mail</label>
+                  <input style={S.input} type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="seu@email.com" required />
+                </div>
+                <div style={{ marginBottom: 24 }}>
+                  <label style={S.label}>Senha</label>
+                  <input style={S.input} type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required minLength={6} />
+                </div>
+                {error && <div style={{ color: 'var(--red)', fontSize: 13, marginBottom: 14, textAlign: 'center', padding: '8px 12px', background: 'var(--red-dim)', borderRadius: 'var(--radius-sm)' }}>{error}</div>}
+                <button type="submit" style={{ ...S.btn('primary'), width: '100%', justifyContent: 'center', padding: '14px', fontSize: 15, fontWeight: 700, borderRadius: 12 }} disabled={loading}>
+                  {loading ? 'Aguarde...' : mode === 'login' ? 'Entrar' : 'Criar Conta'}
+                </button>
+              </form>
+              <div style={{ textAlign: 'center', marginTop: 24, fontSize: 13, color: 'var(--text-muted)' }}>
+                {mode === 'login' ? 'Não tem conta?' : 'Já tem conta?'}{' '}
+                <span style={{ color: 'var(--accent)', cursor: 'pointer', fontWeight: 600 }} onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(''); }}>
+                  {mode === 'login' ? 'Criar conta grátis' : 'Entrar'}
+                </span>
+              </div>
+              <div style={{ textAlign: 'center', marginTop: 28, paddingTop: 20, borderTop: '1px solid var(--border)', fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                Seus dados são protegidos com criptografia<br />de ponta a ponta.
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* RIGHT: Auth Form */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 60px', minWidth: 500 }}>
-        <div style={S.authCard} className="fade-in">
-          <div style={S.authTitle}>{mode === 'login' ? 'Bem-vindo de volta' : 'Criar sua conta'}</div>
-          <div style={S.authSub}>{mode === 'login' ? 'Acesse seu escritório digital' : 'Comece a organizar seus ativos alternativos'}</div>
-          <form onSubmit={handleSubmit}>
-            {mode === 'register' && (
-              <div style={{ marginBottom: 18 }}>
-                <label style={S.label}>Nome completo</label>
-                <input style={S.input} type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Seu nome" required />
-              </div>
-            )}
-            <div style={{ marginBottom: 18 }}>
-              <label style={S.label}>E-mail</label>
-              <input style={S.input} type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="seu@email.com" required />
+      {/* ===== FEATURES SECTION ===== */}
+      <div style={{ padding: '80px 48px', maxWidth: 1200, margin: '0 auto' }}>
+        <div style={{ textAlign: 'center', marginBottom: 48 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)', letterSpacing: '2px', textTransform: 'uppercase', marginBottom: 12 }}>Recursos</div>
+          <h2 style={{ fontSize: 32, fontWeight: 700, letterSpacing: '-0.02em', fontFamily: "'Playfair Display', serif" }}>
+            Tudo que você precisa para gerenciar<br />seus investimentos alternativos
+          </h2>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20 }}>
+          {features.map(f => (
+            <div key={f.title} style={{ background: 'var(--bg-card)', borderRadius: 16, border: '1px solid var(--border)', padding: '28px 24px', transition: 'all 0.2s' }}>
+              <div style={{ width: 48, height: 48, borderRadius: 12, background: 'var(--accent-dim)', border: '1px solid rgba(46,158,110,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, marginBottom: 20 }}>{f.icon}</div>
+              <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 8, letterSpacing: '-0.01em' }}>{f.title}</div>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{f.desc}</div>
             </div>
-            <div style={{ marginBottom: 24 }}>
-              <label style={S.label}>Senha</label>
-              <input style={S.input} type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required minLength={6} />
-            </div>
-            {error && <div style={{ color: 'var(--red)', fontSize: 13, marginBottom: 14, textAlign: 'center', padding: '8px 12px', background: 'var(--red-dim)', borderRadius: 'var(--radius-sm)' }}>{error}</div>}
-            <button type="submit" className="btn-gold" style={{ ...S.btn('primary'), width: '100%', justifyContent: 'center', padding: '13px', fontSize: 14, fontWeight: 700, letterSpacing: '-0.01em' }} disabled={loading}>
-              {loading ? 'Aguarde...' : mode === 'login' ? 'Entrar' : 'Criar Conta'}
-            </button>
-          </form>
-          <div style={{ textAlign: 'center', marginTop: 24, fontSize: 13, color: 'var(--text-muted)' }}>
-            {mode === 'login' ? 'Não tem conta?' : 'Já tem conta?'}{' '}
-            <span style={{ color: 'var(--gold)', cursor: 'pointer', fontWeight: 600 }} onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(''); }}>
-              {mode === 'login' ? 'Criar conta' : 'Entrar'}
-            </span>
-          </div>
-          <div style={{ textAlign: 'center', marginTop: 32, paddingTop: 24, borderTop: '1px solid var(--border)', fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.6 }}>
-            Ao continuar, você concorda com nossos Termos de Uso<br />e Política de Privacidade.
-          </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ===== FOOTER ===== */}
+      <div style={{ padding: '32px 48px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>2026 WealthOffice. Todos os direitos reservados.</div>
+        <div style={{ display: 'flex', gap: 24, fontSize: 12, color: 'var(--text-muted)' }}>
+          <span style={{ cursor: 'pointer' }}>Termos de Uso</span>
+          <span style={{ cursor: 'pointer' }}>Privacidade</span>
+          <span style={{ cursor: 'pointer' }}>Contato</span>
         </div>
       </div>
     </div>
