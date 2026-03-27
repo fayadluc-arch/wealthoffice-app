@@ -735,91 +735,77 @@ export default function WealthOfficeApp() {
   }
 
   // Admin: Batch update from report 24032026
+  // Admin: Full batch update — ALL fields from report 24/03/2026
+  // Match by cedente name (normalized, accent-stripped) since CNJ may be empty in DB
   async function batchUpdateReport24032026() {
     if (!supabase || !isAdmin) return;
-    const UPDATES = [
-      { cnj_part: '0423510', cedente_part: 'Maria de Lourdes', status: 'Recebido', credito_atualizado: 66396.43, valor_receber: 66396.43, retorno: 0.542563, prazo_decorrido: 15.03, tir: 0.413385, data_recebimento: '2025-09-25', prazo_estimado: 'Recebido', ordem_cronologica: 'Depositado' },
-      { cnj_part: '1050219', cedente_part: 'Yara Pereira', status: 'Recebido', credito_atualizado: 179115.58, valor_receber: 102095.88, retorno: 0.398392, prazo_decorrido: 8.53, tir: 0.602473, data_recebimento: '2025-05-19', prazo_estimado: 'Recebido', ordem_cronologica: '2025' },
-      { cnj_part: '0956450', cedente_part: 'Sebastião de Paula', status: 'Transferência', credito_atualizado: 292867.02, valor_receber: 292867.02, retorno: 0.43096, prazo_decorrido: 22.67, prazo_estimado: '0-6 meses', ordem_cronologica: 'Depositado' },
-      { cnj_part: '0018308', cedente_part: 'Luiz Fernando', status: 'Transferência', credito_atualizado: 286241.83, valor_receber: 271929.74, retorno: 0.461641, prazo_decorrido: 20.4, prazo_estimado: '0-6 meses', ordem_cronologica: '2026' },
-      { cnj_part: '0416823', cedente_part: 'Rosangela de Oliveira', status: 'Transferência', credito_atualizado: 105629.27, valor_receber: 75260.86, retorno: 0.553639, prazo_decorrido: 19.23, prazo_estimado: '0-6 meses', ordem_cronologica: '2012' },
-      { cnj_part: '0602624', cedente_part: 'Iara Aparecida', status: 'Transferência', credito_atualizado: 82157.54, valor_receber: 46829.80, retorno: 0.421156, prazo_decorrido: 18.2, prazo_estimado: '0-6 meses', ordem_cronologica: '2025' },
-      { cnj_part: '0602624', cedente_part: 'Jussara Christina', status: 'Transferência', credito_atualizado: 70987.10, valor_receber: 40462.65, retorno: 0.421156, prazo_decorrido: 18.2, prazo_estimado: '0-6 meses', ordem_cronologica: '2025' },
-      { cnj_part: '1048618', cedente_part: 'Maria Regina Darin', status: 'Transferência', credito_atualizado: 363074.81, valor_receber: 206952.64, retorno: 0.553581, prazo_decorrido: 18.2, prazo_estimado: '0-6 meses', ordem_cronologica: '2024' },
-      { cnj_part: '0410229', cedente_part: 'Saverio', status: 'Transferência', credito_atualizado: 230388.59, valor_receber: 172791.44, retorno: 0.984333, prazo_decorrido: 18.2, prazo_estimado: '0-6 meses', ordem_cronologica: '2011' },
-      { cnj_part: '0404044', cedente_part: 'Jane Rosa', status: 'Transferência', credito_atualizado: 127356.66, valor_receber: 120988.83, retorno: 0.969427, prazo_decorrido: 15.23, prazo_estimado: '0-6 meses', ordem_cronologica: 'Depositado' },
-      { cnj_part: '1048618', cedente_part: 'Rosangela Domingues', status: 'Transferência', credito_atualizado: 81742.21, valor_receber: 47819.19, retorno: 0.615753, prazo_decorrido: 3.27, prazo_estimado: '12-24 meses', ordem_cronologica: '2024' },
-      { cnj_part: '0410229', cedente_part: 'Saverio', status: 'Transferência', credito_atualizado: 100158.86, valor_receber: 97654.88, retorno: 0.740207, prazo_decorrido: 3.27, prazo_estimado: '12-24 meses', ordem_cronologica: '2011' },
-      { cnj_part: '0027207', cedente_part: 'Sonia Maria', status: 'Transferência', credito_atualizado: 26371.06, valor_receber: 15427.07, retorno: 0.441885, prazo_decorrido: 3.27, prazo_estimado: '12-24 meses', ordem_cronologica: '2025' },
-      { cnj_part: '0014169', cedente_part: 'Jose Roberto', status: 'Transferência', credito_atualizado: 243668.82, valor_receber: 138891.23, retorno: 0.753971, prazo_decorrido: 19.87, prazo_estimado: '0-6 meses', ordem_cronologica: '2026' },
-      { cnj_part: '0602624', cedente_part: 'Eunice Reis', status: 'Transferência', credito_atualizado: 459745.97, valor_receber: 262055.20, retorno: 0.421156, prazo_decorrido: 18.2, prazo_estimado: '0-6 meses', ordem_cronologica: '2025' },
-      { cnj_part: '0021843', cedente_part: 'Antonio Sidonio', status: 'Análise Procuradoria', credito_atualizado: 163506.60, valor_receber: 93198.76, retorno: 1.459445, prazo_decorrido: 15.23, prazo_estimado: '12-24 meses', ordem_cronologica: '2008' },
-      { cnj_part: '0021843', cedente_part: 'Francisco Jose', status: 'Análise Procuradoria', credito_atualizado: 327109.43, valor_receber: 186452.38, retorno: 1.459444, prazo_decorrido: 15.23, prazo_estimado: '12-24 meses', ordem_cronologica: '2008' },
-      { cnj_part: '0421581', cedente_part: 'Amelia Etsuko', status: 'Fila de Pagamento', credito_atualizado: 306104.78, valor_receber: 290799.54, retorno: 0.639971, prazo_decorrido: 19.87, prazo_estimado: '6-12 meses', ordem_cronologica: '2010' },
-      { cnj_part: '0417462', cedente_part: 'Elisabeth Andrade', status: 'Fila de Pagamento', credito_atualizado: 259463.10, valor_receber: 246489.94, retorno: 0.726265, prazo_decorrido: 19.23, prazo_estimado: '6-12 meses', ordem_cronologica: '2010' },
-      { cnj_part: '0017892', cedente_part: 'Usina Nossa', status: 'Homologação', credito_atualizado: 4286100, valor_receber: 4071795, retorno: 6.7558, prazo_decorrido: 21.5, prazo_estimado: '+36 meses', ordem_cronologica: 'DC' },
-      { cnj_part: '0007417', cedente_part: 'Elisabeth Regina', status: 'Homologação', credito_atualizado: 477007.55, valor_receber: 279049.41, retorno: 0.720534, prazo_decorrido: 5.93, prazo_estimado: '12-24 meses', ordem_cronologica: '2027' },
-      { cnj_part: '061080002', cedente_part: 'Luiz Carlos Tomaz', status: 'Homologação', credito_atualizado: 1300120.71, valor_receber: 1235114.68, retorno: 0.645369, prazo_decorrido: 4.73, prazo_estimado: '6-12 meses', ordem_cronologica: '2009' },
-      { cnj_part: '1006153', cedente_part: 'Rent Equipo', status: 'Homologação', credito_atualizado: 788057.85, valor_receber: 768356.41, retorno: 1.227187, prazo_decorrido: 3.6, prazo_estimado: '24-36 meses', ordem_cronologica: 'DC' },
-      { cnj_part: '0034343', cedente_part: 'Ludmila', status: 'Homologação', credito_atualizado: 138379.17, valor_receber: 134919.69, retorno: 0.771127, prazo_decorrido: 3.27, prazo_estimado: '6-12 meses', ordem_cronologica: '2023' },
-      { cnj_part: '0032749', cedente_part: 'Leonor Claro', status: 'Homologação', credito_atualizado: 889188.63, valor_receber: 520175.35, retorno: 0.579455, prazo_decorrido: 0.2, prazo_estimado: '12-24 meses', ordem_cronologica: '2028' },
-      { cnj_part: '0416046', cedente_part: 'Maria Aparecida Ribeiro', status: 'Homologação', credito_atualizado: 699335.10, valor_receber: 409111.03, retorno: 0.989527, prazo_decorrido: 0.2, prazo_estimado: '24-36 meses', ordem_cronologica: '2028' },
+    const norm = (s) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+
+    // COMPLETE data from Relatorio RG 24032026.xlsx — every field
+    const FULL_DATA = [
+      { cedente: 'Maria de Lourdes Silveira', devedor: 'São Paulo', esfera: 'Estadual', cnj: '0423510-23.1997.8.26.0053', tribunal: 'TJSP', ordem_cronologica: 'Depositado', data_aquisicao: '2024-07-01', desembolso: 43042.94, valor_nominal: 57390, preco: 0.750008, status: 'Recebido', prazo_estimado: 'Recebido', credito_atualizado: 66396.43, pct_receber: 1, honorarios_adv: 0, valor_receber: 66396.43, retorno: 0.542563, prazo_decorrido: 15.03, tir: 0.413385, data_recebimento: '2025-09-25' },
+      { cedente: 'Yara Pereira nunes Galvão', devedor: 'São Paulo', esfera: 'Estadual', cnj: '1050219-79.2016.8.26.0053', tribunal: 'TJSP', ordem_cronologica: '2025', data_aquisicao: '2024-09-05', desembolso: 73009.49, valor_nominal: 169789.51, preco: 0.43, status: 'Recebido', prazo_estimado: 'Recebido', credito_atualizado: 179115.58, pct_receber: 0.6, honorarios_adv: -0.03, valor_receber: 102095.88, retorno: 0.398392, prazo_decorrido: 8.53, tir: 0.602473, data_recebimento: '2025-05-19' },
+      { cedente: 'Sebastião de Paula Rodrigues', devedor: 'São Paulo', esfera: 'Estadual', cnj: '0956450-09.1982.8.26.0053', tribunal: 'TJSP', ordem_cronologica: 'Depositado', data_aquisicao: '2024-04-24', desembolso: 204664.712, valor_nominal: 255830.89, preco: 0.8, status: 'Transferência', prazo_estimado: '0-6 meses', credito_atualizado: 292867.02, pct_receber: 1, honorarios_adv: 0, valor_receber: 292867.02, retorno: 0.43096, prazo_decorrido: 22.67 },
+      { cedente: 'Luiz Fernando Thomaz de Lima', devedor: 'Brasil', esfera: 'Federal', cnj: '0018308-85.2009.8.26.0320', tribunal: 'TRF3', ordem_cronologica: '2026', data_aquisicao: '2024-07-01', desembolso: 186044.17, valor_nominal: 265777, preco: 0.700001, status: 'Transferência', prazo_estimado: '0-6 meses', credito_atualizado: 286241.83, pct_receber: 1, honorarios_adv: -0.05, valor_receber: 271929.74, retorno: 0.461641, prazo_decorrido: 20.4 },
+      { cedente: 'Rosangela de Oliveira', devedor: 'São Paulo', esfera: 'Municipal', cnj: '0416823-64.1996.8.26.0053', tribunal: 'TJSP', ordem_cronologica: '2012', data_aquisicao: '2024-08-05', desembolso: 48441.67, valor_nominal: 88075.77, preco: 0.55, status: 'Transferência', prazo_estimado: '0-6 meses', credito_atualizado: 105629.27, pct_receber: 0.75, honorarios_adv: -0.0375, valor_receber: 75260.86, retorno: 0.553639, prazo_decorrido: 19.23 },
+      { cedente: 'Iara Aparecida Reis', devedor: 'São Paulo', esfera: 'Estadual', cnj: '0602624-33.2008.8.26.0053', tribunal: 'TJSP', ordem_cronologica: '2025', data_aquisicao: '2024-09-05', desembolso: 32951.91, valor_nominal: 76632.35, preco: 0.43, status: 'Transferência', prazo_estimado: '0-6 meses', credito_atualizado: 82157.54, pct_receber: 0.6, honorarios_adv: -0.03, valor_receber: 46829.80, retorno: 0.421156, prazo_decorrido: 18.2 },
+      { cedente: 'Jussara Christina Reis', devedor: 'São Paulo', esfera: 'Estadual', cnj: '0602624-33.2008.8.26.0053', tribunal: 'TJSP', ordem_cronologica: '2025', data_aquisicao: '2024-09-05', desembolso: 28471.65, valor_nominal: 66213.13, preco: 0.43, status: 'Transferência', prazo_estimado: '0-6 meses', credito_atualizado: 70987.10, pct_receber: 0.6, honorarios_adv: -0.03, valor_receber: 40462.65, retorno: 0.421156, prazo_decorrido: 18.2 },
+      { cedente: 'Maria Regina Darin de Carvalho', devedor: 'São Paulo', esfera: 'Estadual', cnj: '1048618-28.2022.8.26.0053', tribunal: 'TJSP', ordem_cronologica: '2024', data_aquisicao: '2024-09-05', desembolso: 133210.04, valor_nominal: 309790.79, preco: 0.43, status: 'Transferência', prazo_estimado: '0-6 meses', credito_atualizado: 363074.81, pct_receber: 0.6, honorarios_adv: -0.03, valor_receber: 206952.64, retorno: 0.553581, prazo_decorrido: 18.2 },
+      { cedente: 'Saverio Luiz Perillo', devedor: 'São Paulo', esfera: 'Municipal', cnj: '0410229-34.1996.8.26.0053/0005', tribunal: 'TJSP', ordem_cronologica: '2011', data_aquisicao: '2024-09-05', desembolso: 87077.83, valor_nominal: 193506.29, preco: 0.45, status: 'Transferência', prazo_estimado: '0-6 meses', credito_atualizado: 230388.59, pct_receber: 0.75, honorarios_adv: 0, valor_receber: 172791.44, retorno: 0.984333, prazo_decorrido: 18.2 },
+      { cedente: 'Jane Rosa da Silva Reis Pimenta', devedor: 'São Paulo', esfera: 'Municipal', cnj: '0404044-09.1998.8.26.0053', tribunal: 'TJSP', ordem_cronologica: 'Depositado', data_aquisicao: '2024-12-03', desembolso: 61433.51, valor_nominal: 115912.29, preco: 0.53, status: 'Transferência', prazo_estimado: '0-6 meses', credito_atualizado: 127356.66, pct_receber: 1, honorarios_adv: -0.05, valor_receber: 120988.83, retorno: 0.969427, prazo_decorrido: 15.23 },
+      { cedente: 'Rosangela Domingues Correa', devedor: 'São Paulo', esfera: 'Municipal', cnj: '1048618-28.2022.8.26.0053', tribunal: 'TJSP', ordem_cronologica: '2024', data_aquisicao: '2025-11-27', desembolso: 29595.615, valor_nominal: 78962.725, preco: 0.374805, status: 'Transferência', prazo_estimado: '12-24 meses', credito_atualizado: 81742.21, pct_receber: 0.6, honorarios_adv: -0.015, valor_receber: 47819.19, retorno: 0.615753, prazo_decorrido: 3.27 },
+      { cedente: 'Saverio Luiz Perillo', devedor: 'São Paulo', esfera: 'Municipal', cnj: '0410229-34.1996.8.26.0053', tribunal: 'TJSP', ordem_cronologica: '2011', data_aquisicao: '2025-11-27', desembolso: 56116.825, valor_nominal: 96753.145, preco: 0.58, status: 'Transferência', prazo_estimado: '12-24 meses', credito_atualizado: 100158.86, pct_receber: 1, honorarios_adv: -0.025, valor_receber: 97654.88, retorno: 0.740207, prazo_decorrido: 3.27 },
+      { cedente: 'Sonia Maria Teixeira Fernandes de Barros', devedor: 'São Paulo', esfera: 'Municipal', cnj: '0027207-10.2003.8.26.0053', tribunal: 'TJSP', ordem_cronologica: '2025', data_aquisicao: '2025-11-27', desembolso: 10699.235, valor_nominal: 25474.365, preco: 0.42, status: 'Transferência', prazo_estimado: '12-24 meses', credito_atualizado: 26371.06, pct_receber: 0.6, honorarios_adv: -0.015, valor_receber: 15427.07, retorno: 0.441885, prazo_decorrido: 3.27 },
+      { cedente: 'Jose Roberto Gasparine', devedor: 'São Paulo', esfera: 'Estadual', cnj: '0014169-35.2008.8.26.0576', tribunal: 'TJSP', ordem_cronologica: '2026', data_aquisicao: '2024-07-17', desembolso: 79186.71, valor_nominal: 226247.74, preco: 0.35, status: 'Transferência', prazo_estimado: '0-6 meses', credito_atualizado: 243668.82, pct_receber: 0.6, honorarios_adv: -0.03, valor_receber: 138891.23, retorno: 0.753971, prazo_decorrido: 19.87 },
+      { cedente: 'Eunice Reis', devedor: 'São Paulo', esfera: 'Estadual', cnj: '0602624-33.2008.8.26.0053', tribunal: 'TJSP', ordem_cronologica: '2025', data_aquisicao: '2024-09-05', desembolso: 184395.83, valor_nominal: 428827.51, preco: 0.43, status: 'Transferência', prazo_estimado: '0-6 meses', credito_atualizado: 459745.97, pct_receber: 0.6, honorarios_adv: -0.03, valor_receber: 262055.20, retorno: 0.421156, prazo_decorrido: 18.2 },
+      { cedente: 'Antonio Sidonio Rodrigues', devedor: 'Santo André', esfera: 'Municipal', cnj: '0021843-53.1996.8.26.0554', tribunal: 'TJSP', ordem_cronologica: '2008', data_aquisicao: '2024-12-03', desembolso: 37894.23, valor_nominal: 140349.01, preco: 0.27, status: 'Análise Procuradoria', prazo_estimado: '12-24 meses', credito_atualizado: 163506.60, pct_receber: 0.6, honorarios_adv: -0.03, valor_receber: 93198.76, retorno: 1.459445, prazo_decorrido: 15.23 },
+      { cedente: 'Francisco Jose Calheiros Ferreira', devedor: 'Santo André', esfera: 'Municipal', cnj: '0021843-53.1996.8.26.0554', tribunal: 'TJSP', ordem_cronologica: '2008', data_aquisicao: '2024-12-03', desembolso: 75810.77, valor_nominal: 280780.63, preco: 0.27, status: 'Análise Procuradoria', prazo_estimado: '12-24 meses', credito_atualizado: 327109.43, pct_receber: 0.6, honorarios_adv: -0.03, valor_receber: 186452.38, retorno: 1.459444, prazo_decorrido: 15.23 },
+      { cedente: 'Amelia Etsuko Tasukawa de Freitas', devedor: 'São Paulo', esfera: 'Municipal', cnj: '0421581-86.1996.8.26.0053', tribunal: 'TJSP', ordem_cronologica: '2010', data_aquisicao: '2024-07-17', desembolso: 177319.98, valor_nominal: 253314.12, preco: 0.7, status: 'Fila de Pagamento', prazo_estimado: '6-12 meses', credito_atualizado: 306104.78, pct_receber: 1, honorarios_adv: -0.05, valor_receber: 290799.54, retorno: 0.639971, prazo_decorrido: 19.87 },
+      { cedente: 'Elisabeth Andrade Khoury', devedor: 'São Paulo', esfera: 'Municipal', cnj: '0417462-77.1999.8.26.0053', tribunal: 'TJSP', ordem_cronologica: '2010', data_aquisicao: '2024-08-05', desembolso: 142788, valor_nominal: 216345.45, preco: 0.66, status: 'Fila de Pagamento', prazo_estimado: '6-12 meses', credito_atualizado: 259463.10, pct_receber: 1, honorarios_adv: -0.05, valor_receber: 246489.94, retorno: 0.726265, prazo_decorrido: 19.23 },
+      { cedente: 'Usina Nossa Senhora do Carmo', devedor: 'Brasil', esfera: 'Federal', cnj: '0017892-58.2008.4.01.3400', tribunal: 'TRF1', ordem_cronologica: 'DC', data_aquisicao: '2024-05-29', desembolso: 525000, valor_nominal: 3500000, preco: 0.15, status: 'Homologação', prazo_estimado: '+36 meses', credito_atualizado: 4286100, pct_receber: 1, honorarios_adv: -0.05, valor_receber: 4071795, retorno: 6.7558, prazo_decorrido: 21.5 },
+      { cedente: 'Elisabeth Regina da Silva', devedor: 'São Paulo', esfera: 'Municipal', cnj: '0007417-05.2024.8.26.0053/27', tribunal: 'TJSP', ordem_cronologica: '2027', data_aquisicao: '2025-09-08', desembolso: 162187.68, valor_nominal: 457868.64, preco: 0.354223, status: 'Homologação', prazo_estimado: '12-24 meses', credito_atualizado: 477007.55, pct_receber: 0.6, honorarios_adv: -0.015, valor_receber: 279049.41, retorno: 0.720534, prazo_decorrido: 5.93 },
+      { cedente: 'Luiz Carlos Tomaz Araujo', devedor: 'São Paulo', esfera: 'Municipal', cnj: '061080002.1988.8.26.0053/0001', tribunal: 'TJSP', ordem_cronologica: '2009', data_aquisicao: '2025-10-14', desembolso: 750661.2725, valor_nominal: 1230592.25, preco: 0.61, status: 'Homologação', prazo_estimado: '6-12 meses', credito_atualizado: 1300120.71, pct_receber: 1, honorarios_adv: -0.05, valor_receber: 1235114.68, retorno: 0.645369, prazo_decorrido: 4.73 },
+      { cedente: 'Rent Equipo Naval', devedor: 'Brasil', esfera: 'Federal', cnj: '1006153-69.2020.4.01.3200', tribunal: 'TRF3', ordem_cronologica: 'DC', data_aquisicao: '2025-11-17', desembolso: 344989.577, valor_nominal: 755061.66, preco: 0.456903, status: 'Homologação', prazo_estimado: '24-36 meses', credito_atualizado: 788057.85, pct_receber: 1, honorarios_adv: -0.025, valor_receber: 768356.41, retorno: 1.227187, prazo_decorrido: 3.6 },
+      { cedente: 'Ludmila da Silva Cruz', devedor: 'Santos', esfera: 'Municipal', cnj: '0034343-20.2002.8.26.0562/04', tribunal: 'TJSP', ordem_cronologica: '2023', data_aquisicao: '2025-11-27', desembolso: 76177.315, valor_nominal: 136066.05, preco: 0.559855, status: 'Homologação', prazo_estimado: '6-12 meses', credito_atualizado: 138379.17, pct_receber: 1, honorarios_adv: -0.025, valor_receber: 134919.69, retorno: 0.771127, prazo_decorrido: 3.27 },
+      { cedente: 'Leonor Claro de Oliveira Silva', devedor: 'São Paulo', esfera: 'Estadual', cnj: '0032749-76.2021.8.26.0053/0001', tribunal: 'TJSP', ordem_cronologica: '2028', data_aquisicao: '2026-02-27', desembolso: 329338.47, valor_nominal: 879513.98, preco: 0.374455, status: 'Homologação', prazo_estimado: '12-24 meses', credito_atualizado: 889188.63, pct_receber: 0.6, honorarios_adv: -0.015, valor_receber: 520175.35, retorno: 0.579455, prazo_decorrido: 0.2 },
+      { cedente: 'Maria Aparecida Ribeiro Canário', devedor: 'São Paulo', esfera: 'Municipal', cnj: '0416046-16.1995.8.26.0053/20', tribunal: 'TJSP', ordem_cronologica: '2028', data_aquisicao: '2026-02-27', desembolso: 205632.36, valor_nominal: 691726.11, preco: 0.297274, status: 'Homologação', prazo_estimado: '24-36 meses', credito_atualizado: 699335.10, pct_receber: 0.6, honorarios_adv: -0.015, valor_receber: 409111.03, retorno: 0.989527, prazo_decorrido: 0.2 },
     ];
 
-    // Normalize: strip accents for matching
-    const norm = (s) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-    // Strip all non-digits from CNJ for matching
-    const cnjDigits = (s) => (s || '').replace(/\D/g, '');
-
     let updated = 0, notFound = 0, notFoundList = [];
-    const usedIds = new Set(); // avoid double-matching
+    const usedIds = new Set();
 
-    for (const upd of UPDATES) {
-      // Try CNJ + cedente match first (strict)
-      let match = precatorios.find(p =>
-        !usedIds.has(p.id) &&
-        cnjDigits(p.cnj).includes(upd.cnj_part.replace(/\D/g, '')) &&
-        norm(p.cedente).includes(norm(upd.cedente_part))
-      );
-
-      // Fallback: match just by desembolso + cnj (for encoding issues)
-      if (!match) {
-        match = precatorios.find(p =>
-          !usedIds.has(p.id) &&
-          cnjDigits(p.cnj).includes(upd.cnj_part.replace(/\D/g, ''))
-        );
-        // If multiple matches on same CNJ, try matching by desembolso proximity
-        if (!match) {
-          const cnjMatches = precatorios.filter(p =>
-            !usedIds.has(p.id) &&
-            cnjDigits(p.cnj).includes(upd.cnj_part.replace(/\D/g, ''))
-          );
-          if (cnjMatches.length > 0) match = cnjMatches[0];
-        }
-      }
+    for (const upd of FULL_DATA) {
+      // Match by cedente name (normalized, accent-stripped)
+      const updNorm = norm(upd.cedente);
+      let match = precatorios.find(p => !usedIds.has(p.id) && norm(p.cedente) === updNorm);
+      // Fallback: partial match on first 12 chars
+      if (!match) match = precatorios.find(p => !usedIds.has(p.id) && norm(p.cedente).includes(updNorm.substring(0, 12)));
+      // Fallback: match by desembolso (exact)
+      if (!match) match = precatorios.find(p => !usedIds.has(p.id) && Math.abs(Number(p.desembolso || 0) - upd.desembolso) < 1);
 
       if (match) {
         usedIds.add(match.id);
-        const updateData = {
-          status: upd.status, credito_atualizado: upd.credito_atualizado,
-          valor_receber: upd.valor_receber, retorno: upd.retorno,
-          prazo_decorrido: upd.prazo_decorrido, prazo_estimado: upd.prazo_estimado,
-          ordem_cronologica: upd.ordem_cronologica,
-        };
-        if (upd.tir) updateData.tir = upd.tir;
-        if (upd.data_recebimento) updateData.data_recebimento = upd.data_recebimento;
-
-        const { error } = await supabase.from('precatorios').update(updateData).eq('id', match.id);
+        const { error } = await supabase.from('precatorios').update({
+          cedente: upd.cedente, devedor: upd.devedor, esfera: upd.esfera,
+          cnj: upd.cnj, tribunal: upd.tribunal, ordem_cronologica: upd.ordem_cronologica,
+          data_aquisicao: upd.data_aquisicao, desembolso: upd.desembolso,
+          valor_nominal: upd.valor_nominal, preco: upd.preco,
+          status: upd.status, prazo_estimado: upd.prazo_estimado,
+          credito_atualizado: upd.credito_atualizado, pct_receber: upd.pct_receber,
+          honorarios_adv: upd.honorarios_adv, valor_receber: upd.valor_receber,
+          retorno: upd.retorno, prazo_decorrido: upd.prazo_decorrido,
+          tir: upd.tir || 0,
+          data_recebimento: upd.data_recebimento || null,
+        }).eq('id', match.id);
         if (!error) updated++;
-        else console.log('Update error:', match.cedente, error.message);
+        else console.log('Error:', match.cedente, error.message);
       } else {
         notFound++;
-        notFoundList.push(upd.cedente_part);
-        console.log('Not found:', upd.cedente_part, upd.cnj_part, '| Available CNJs:', precatorios.map(p => cnjDigits(p.cnj)).join(', '));
+        notFoundList.push(upd.cedente);
       }
     }
 
-    alert(`Atualização: ${updated} atualizados, ${notFound} não encontrados${notFoundList.length ? '\n\nNão encontrados: ' + notFoundList.join(', ') : ''}`);
+    alert(`Atualização completa: ${updated} atualizados, ${notFound} não encontrados${notFoundList.length ? '\n\n' + notFoundList.join('\n') : ''}`);
     await loadData();
   }
 
@@ -1014,37 +1000,27 @@ function DashboardTab({ precatorios, onNavigate, isAdmin, onBatchUpdate }) {
         </div>
       </div>
 
-      {/* KPI CARDS */}
-      <div style={S.kpiGrid}>
+      {/* KPI CARDS — 4 columns, clean layout */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 28 }}>
         <div style={S.kpiCard(false)}>
-          <div style={S.kpiLabel}><span style={{ color: 'var(--blue)' }}>{Icons.dollarSign}</span> Desembolso Total</div>
-          <div style={S.kpiValue()}>{fmtBRL(totalDesembolso)}</div>
-          <div style={S.kpiSub}>Capital investido</div>
-        </div>
-        <div style={S.kpiCard(false)}>
-          <div style={S.kpiLabel}><span style={{ color: 'var(--purple)' }}>{Icons.briefcase}</span> Valor de Face</div>
-          <div style={S.kpiValue()}>{fmtBRL(totalNominal)}</div>
-          <div style={S.kpiSub}>Valor nominal total</div>
+          <div style={S.kpiLabel}><span style={{ color: 'var(--blue)' }}>{Icons.dollarSign}</span> Capital Investido</div>
+          <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>{fmtBRL(totalDesembolso)}</div>
+          <div style={S.kpiSub}>{precatorios.length} precatórios no book</div>
         </div>
         <div style={S.kpiCard(true)}>
-          <div style={S.kpiLabel}><span style={{ color: 'var(--accent)' }}>{Icons.trendUp}</span> A Receber</div>
-          <div style={S.kpiValue('var(--accent-light)')}>{fmtBRL(totalReceber)}</div>
-          <div style={S.kpiSub}>Valor atualizado</div>
+          <div style={S.kpiLabel}><span style={{ color: 'var(--accent)' }}>{Icons.trendUp}</span> Valor a Receber</div>
+          <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums', color: 'var(--accent-light)' }}>{fmtBRL(totalReceber)}</div>
+          <div style={S.kpiSub}>Crédito atualizado total</div>
         </div>
         <div style={S.kpiCard(false)}>
           <div style={S.kpiLabel}><span style={{ color: 'var(--green)' }}>{Icons.trendUp}</span> Lucro Estimado</div>
-          <div style={S.kpiValue('var(--green)')}>{fmtBRL(totalLucro)}</div>
-          <div style={S.kpiSub}>{fmtPct(totalDesembolso > 0 ? totalLucro / totalDesembolso : 0)} sobre desembolso</div>
+          <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums', color: 'var(--green)' }}>{fmtBRL(totalLucro)}</div>
+          <div style={S.kpiSub}>{fmtPct(totalDesembolso > 0 ? totalLucro / totalDesembolso : 0)} sobre capital</div>
         </div>
         <div style={S.kpiCard(false)}>
-          <div style={S.kpiLabel}><span style={{ color: 'var(--orange)' }}>{Icons.trendUp}</span> Retorno Ponderado</div>
-          <div style={S.kpiValue()}>{fmtPct(avgRetorno)}</div>
-          <div style={S.kpiSub}>Ponderado por desembolso</div>
-        </div>
-        <div style={S.kpiCard(false)}>
-          <div style={S.kpiLabel}><span style={{ color: 'var(--blue)' }}>{Icons.clock}</span> TIR Esperada</div>
-          <div style={S.kpiValue()}>{fmtPct(avgTIR)}</div>
-          <div style={S.kpiSub}>{recebidos.length > 0 ? `Realizada: ${fmtPct(tirRealizada)}` : `${ativos.length} ativos no book`}</div>
+          <div style={S.kpiLabel}><span style={{ color: 'var(--orange)' }}>{Icons.trendUp}</span> Retorno Esperado</div>
+          <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>{fmtPct(avgRetorno)}</div>
+          <div style={S.kpiSub}>{recebidos.length > 0 ? `Realizado: ${fmtPct(tirRealizada)} a.a.` : 'Ponderado por desembolso'}</div>
         </div>
       </div>
 
@@ -1151,6 +1127,16 @@ function BookTab({ precatorios, onDetail, onExport, onNavigate, onDelete }) {
         if (typeof va === 'string') { va = va.toLowerCase(); vb = (vb || '').toLowerCase(); }
         else { va = Number(va || 0); vb = Number(vb || 0); }
         return sortDir === 'asc' ? (va > vb ? 1 : -1) : (va < vb ? 1 : -1);
+      });
+    } else {
+      // Default sort: by prazo (shortest first), then by status priority
+      const prazoOrder = { 'Recebido': 0, '0-6 meses': 1, '6-12 meses': 2, '12-24 meses': 3, '24-36 meses': 4, '+36 meses': 5 };
+      const statusOrder = { 'Recebido': 5, 'Transferência': 1, 'Fila de Pagamento': 2, 'Análise Procuradoria': 3, 'Homologação': 4 };
+      list.sort((a, b) => {
+        const sa = statusOrder[a.status] || 9, sb = statusOrder[b.status] || 9;
+        if (sa !== sb) return sa - sb;
+        const pa = prazoOrder[a.prazo_estimado] || 9, pb = prazoOrder[b.prazo_estimado] || 9;
+        return pa - pb;
       });
     }
     return list;
