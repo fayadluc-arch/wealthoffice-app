@@ -49,58 +49,64 @@ function detectTribunal(cnj) {
   return 'TJSP';
 }
 
+// Query DataJud with a specific tribunal endpoint
+async function queryDatajud(endpoint, numeroProcesso) {
+  const url = `https://api-publica.datajud.cnj.jus.br/${endpoint}/_search`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Authorization': `APIKey ${DATAJUD_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query: { match: { numeroProcesso } } }),
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  const hits = data.hits?.hits || [];
+  const total = data.hits?.total?.value || 0;
+  return total > 0 ? { hits, total } : null;
+}
+
 export async function POST(request) {
   try {
     const { cnj, tribunal: tribunalHint } = await request.json();
     if (!cnj) return NextResponse.json({ error: 'CNJ é obrigatório' }, { status: 400 });
 
-    const cleanCnj = cnj.replace(/[^\d.-]/g, '');
+    // Strip suffix like /0005, /27, /0001 etc
+    const baseCnj = cnj.split('/')[0].trim();
+    const cleanCnj = baseCnj.replace(/[^\d.-]/g, '');
+    const digits = cleanCnj.replace(/[^\d]/g, '');
+
     const tribunal = tribunalHint || detectTribunal(cleanCnj);
     const endpoint = TRIBUNAL_ENDPOINTS[tribunal] || 'api_publica_tjsp';
 
-    const url = `https://api-publica.datajud.cnj.jus.br/${endpoint}/_search`;
-
-    const body = {
-      query: {
-        match: {
-          numeroProcesso: cleanCnj.replace(/[^\d]/g, '')
-        }
-      }
-    };
-
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Authorization': `APIKey ${DATAJUD_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    });
-
-    if (!res.ok) {
-      // Try without tribunal-specific endpoint
-      const fallbackUrl = `https://api-publica.datajud.cnj.jus.br/api_publica_tjsp/_search`;
-      const res2 = await fetch(fallbackUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `APIKey ${DATAJUD_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-      });
-      if (!res2.ok) {
-        return NextResponse.json({ error: `DataJud retornou ${res2.status}`, tribunal, endpoint }, { status: 502 });
-      }
-      const data2 = await res2.json();
-      return NextResponse.json({ tribunal: 'TJSP', data: data2.hits?.hits || [], total: data2.hits?.total?.value || 0 });
+    // Try 1: detected tribunal with full digits
+    let result = await queryDatajud(endpoint, digits);
+    if (result) {
+      return NextResponse.json({ tribunal, data: result.hits, total: result.total });
     }
 
-    const data = await res.json();
-    return NextResponse.json({
-      tribunal,
-      data: data.hits?.hits || [],
-      total: data.hits?.total?.value || 0,
-    });
+    // Try 2: first 20 digits only (strip suffix noise)
+    if (digits.length > 20) {
+      result = await queryDatajud(endpoint, digits.substring(0, 20));
+      if (result) return NextResponse.json({ tribunal, data: result.hits, total: result.total });
+    }
+
+    // Try 3: TJSP fallback (largest tribunal, many processes)
+    if (endpoint !== 'api_publica_tjsp') {
+      result = await queryDatajud('api_publica_tjsp', digits);
+      if (result) return NextResponse.json({ tribunal: 'TJSP', data: result.hits, total: result.total });
+      // Also try with 20 digits
+      if (digits.length > 20) {
+        result = await queryDatajud('api_publica_tjsp', digits.substring(0, 20));
+        if (result) return NextResponse.json({ tribunal: 'TJSP', data: result.hits, total: result.total });
+      }
+    }
+
+    // Try 4: TRF1 fallback (federal)
+    if (endpoint !== 'api_publica_trf1') {
+      result = await queryDatajud('api_publica_trf1', digits.substring(0, 20));
+      if (result) return NextResponse.json({ tribunal: 'TRF1', data: result.hits, total: result.total });
+    }
+
+    return NextResponse.json({ tribunal, data: [], total: 0 });
   } catch (err) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

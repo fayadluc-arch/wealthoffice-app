@@ -1446,7 +1446,7 @@ function DetalheTab({ precatorio, onBack, onSave, onDelete, atividades }) {
               {datajudLoading && <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '12px 0' }}>Consultando tribunal...</div>}
               {datajud && datajud.data && datajud.data.length > 0 && (() => {
                 const proc = datajud.data[0]._source || {};
-                const movs = (proc.movimentos || []).slice(0, 8);
+                const movs = [...(proc.movimentos || [])].sort((a, b) => new Date(b.dataHora || 0) - new Date(a.dataHora || 0)).slice(0, 8);
                 return (
                   <>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
