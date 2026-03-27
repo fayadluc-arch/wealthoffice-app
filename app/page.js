@@ -929,10 +929,22 @@ function DashboardTab({ precatorios, onNavigate, isAdmin, onBatchUpdate }) {
   const avgRetorno = totalDesembolso > 0
     ? precatorios.reduce((s, p) => s + Number(p.retorno || 0) * Number(p.desembolso || 0), 0) / totalDesembolso
     : 0;
-  // TIR only for received precatórios (TIR > 0)
-  const tirPrecatorios = precatorios.filter(p => Number(p.tir || 0) > 0);
-  const avgTIR = tirPrecatorios.length > 0
-    ? tirPrecatorios.reduce((s, p) => s + Number(p.tir || 0) * Number(p.desembolso || 0), 0) / tirPrecatorios.reduce((s, p) => s + Number(p.desembolso || 0), 0)
+  // TIR esperada: calculada com base no prazo estimado para todo o book
+  const ativos = precatorios.filter(p => p.status !== 'Recebido');
+  const ativosDesembolso = ativos.reduce((s, p) => s + Number(p.desembolso || 0), 0);
+  const avgTIR = ativosDesembolso > 0
+    ? ativos.reduce((s, p) => {
+        const d = Number(p.desembolso || 0);
+        const vr = Number(p.valor_receber || 0);
+        const meses = prazoToMeses(p.prazo_estimado);
+        const tir = (d > 0 && vr > 0 && meses > 0) ? (Math.pow(vr / d, 1 / (meses / 12)) - 1) : 0;
+        return s + tir * d;
+      }, 0) / ativosDesembolso
+    : 0;
+  // TIR realizada (precatórios já recebidos)
+  const recebidos = precatorios.filter(p => p.status === 'Recebido' && Number(p.tir) > 0);
+  const tirRealizada = recebidos.length > 0
+    ? recebidos.reduce((s, p) => s + Number(p.tir) * Number(p.desembolso || 0), 0) / recebidos.reduce((s, p) => s + Number(p.desembolso || 0), 0)
     : 0;
 
   const statusData = STATUS_LIST.map(st => ({ label: st, value: precatorios.filter(p => p.status === st).length, color: STATUS_COLORS[st] }));
@@ -998,14 +1010,14 @@ function DashboardTab({ precatorios, onNavigate, isAdmin, onBatchUpdate }) {
           <div style={S.kpiSub}>{fmtPct(totalDesembolso > 0 ? totalLucro / totalDesembolso : 0)} sobre desembolso</div>
         </div>
         <div style={S.kpiCard(false)}>
-          <div style={S.kpiLabel}><span style={{ color: 'var(--orange)' }}>{Icons.trendUp}</span> Retorno Médio</div>
+          <div style={S.kpiLabel}><span style={{ color: 'var(--orange)' }}>{Icons.trendUp}</span> Retorno Ponderado</div>
           <div style={S.kpiValue()}>{fmtPct(avgRetorno)}</div>
-          <div style={S.kpiSub}>Média ponderada do book</div>
+          <div style={S.kpiSub}>Ponderado por desembolso</div>
         </div>
         <div style={S.kpiCard(false)}>
-          <div style={S.kpiLabel}><span style={{ color: 'var(--blue)' }}>{Icons.clock}</span> TIR Média</div>
+          <div style={S.kpiLabel}><span style={{ color: 'var(--blue)' }}>{Icons.clock}</span> TIR Esperada</div>
           <div style={S.kpiValue()}>{fmtPct(avgTIR)}</div>
-          <div style={S.kpiSub}>Taxa interna de retorno</div>
+          <div style={S.kpiSub}>{recebidos.length > 0 ? `Realizada: ${fmtPct(tirRealizada)}` : `${ativos.length} ativos no book`}</div>
         </div>
       </div>
 
