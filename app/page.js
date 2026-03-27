@@ -1266,16 +1266,42 @@ function DetalheTab({ precatorio, onBack, onSave, onDelete, atividades }) {
       const data = { ...precatorio };
       setForm(data);
       originalRef.current = { ...data };
-      // Auto-fetch DataJud if has CNJ
-      if (precatorio.cnj) fetchDatajud(precatorio.cnj);
+      if (precatorio.cnj) loadDatajud(precatorio.id, precatorio.cnj);
     }
   }, [precatorio]);
 
-  async function fetchDatajud(cnj) {
+  function loadDatajud(precId, cnj) {
+    // Try cache first
+    try {
+      const raw = localStorage.getItem('wo_datajud_cache');
+      if (raw) {
+        const cached = JSON.parse(raw);
+        if (cached[precId] && !cached[precId].error) {
+          setDatajud(cached[precId]);
+          return; // use cache, no need to fetch
+        }
+      }
+    } catch {}
+    // Fetch from API
+    fetchDatajud(precId, cnj);
+  }
+
+  async function fetchDatajud(precId, cnj) {
     setDatajudLoading(true);
     try {
       const res = await fetch('/api/datajud', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cnj }) });
-      if (res.ok) { const json = await res.json(); setDatajud(json); }
+      if (res.ok) {
+        const json = await res.json();
+        setDatajud(json);
+        // Save to shared cache
+        try {
+          const raw = localStorage.getItem('wo_datajud_cache');
+          const cached = raw ? JSON.parse(raw) : {};
+          cached[precId] = json;
+          cached._ts = Date.now();
+          localStorage.setItem('wo_datajud_cache', JSON.stringify(cached));
+        } catch {}
+      }
     } catch {}
     setDatajudLoading(false);
   }
@@ -1515,24 +1541,48 @@ function DetalheTab({ precatorio, onBack, onSave, onDelete, atividades }) {
 // BUSCAR TAB
 // ============================================================
 function AcompanhamentoTab({ precatorios, onDetail }) {
-  const [datajudResults, setDatajudResults] = useState({});
+  const CACHE_KEY = 'wo_datajud_cache';
+  const CACHE_MAX_AGE = 24 * 60 * 60 * 1000; // 24h
+
+  // Load from cache on init
+  const [datajudResults, setDatajudResults] = useState(() => {
+    try {
+      const raw = localStorage.getItem(CACHE_KEY);
+      if (!raw) return {};
+      const cached = JSON.parse(raw);
+      // Check if cache is still fresh
+      if (cached._ts && (Date.now() - cached._ts) < CACHE_MAX_AGE) {
+        delete cached._ts;
+        return cached;
+      }
+    } catch {}
+    return {};
+  });
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
-  // Auto-fetch all processes on mount
+  // Save to cache whenever results change
+  function saveCache(results) {
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ ...results, _ts: Date.now() }));
+    } catch {}
+  }
+
+  // Auto-fetch only processes NOT in cache
   useEffect(() => {
     if (loaded || precatorios.length === 0) return;
-    fetchAll();
+    const withCnj = precatorios.filter(p => p.cnj && p.cnj.trim().length > 10);
+    const needsFetch = withCnj.filter(p => !datajudResults[p.id]);
+    if (needsFetch.length === 0) { setLoaded(true); return; }
+    fetchMissing(needsFetch);
   }, [precatorios]);
 
-  async function fetchAll() {
+  async function fetchMissing(toFetch) {
     setLoading(true);
-    const withCnj = precatorios.filter(p => p.cnj && p.cnj.trim().length > 10);
-    const results = {};
+    const results = { ...datajudResults };
 
-    // Fetch in batches of 3 to avoid rate limiting
-    for (let i = 0; i < withCnj.length; i += 3) {
-      const batch = withCnj.slice(i, i + 3);
+    for (let i = 0; i < toFetch.length; i += 3) {
+      const batch = toFetch.slice(i, i + 3);
       const promises = batch.map(async (p) => {
         try {
           const res = await fetch('/api/datajud', {
@@ -1541,8 +1591,7 @@ function AcompanhamentoTab({ precatorios, onDetail }) {
             body: JSON.stringify({ cnj: p.cnj }),
           });
           if (res.ok) {
-            const json = await res.json();
-            results[p.id] = json;
+            results[p.id] = await res.json();
           } else {
             results[p.id] = { error: true };
           }
@@ -1551,12 +1600,19 @@ function AcompanhamentoTab({ precatorios, onDetail }) {
         }
       });
       await Promise.all(promises);
-      setDatajudResults({ ...results }); // update progressively
+      setDatajudResults({ ...results });
     }
 
+    saveCache(results);
     setDatajudResults(results);
     setLoading(false);
     setLoaded(true);
+  }
+
+  // Force refresh all
+  async function refreshAll() {
+    const withCnj = precatorios.filter(p => p.cnj && p.cnj.trim().length > 10);
+    await fetchMissing(withCnj);
   }
 
   const ativos = precatorios.filter(p => p.status !== 'Recebido');
@@ -1587,7 +1643,7 @@ function AcompanhamentoTab({ precatorios, onDetail }) {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {loading && <span style={{ fontSize: 12, color: 'var(--accent)' }}>Consultando tribunais...</span>}
-          <button style={S.btn('default')} onClick={() => { setLoaded(false); fetchAll(); }} disabled={loading}>
+          <button style={S.btn('default')} onClick={refreshAll} disabled={loading}>
             {Icons.search} {loading ? 'Atualizando...' : 'Atualizar'}
           </button>
         </div>
