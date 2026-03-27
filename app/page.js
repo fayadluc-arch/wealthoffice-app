@@ -383,6 +383,10 @@ export default function WealthOfficeApp() {
   const [selectedId, setSelectedId] = useState(null);
   // Delete confirm
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+  // Admin state
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [clients, setClients] = useState([]);
+  const [selectedClient, setSelectedClient] = useState(null); // null = all
 
   // Check session
   useEffect(() => {
@@ -397,18 +401,38 @@ export default function WealthOfficeApp() {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Check admin role
+  useEffect(() => {
+    if (!supabase || !user) return;
+    supabase.from('profiles').select('role').eq('id', user.id).single().then(({ data }) => {
+      setIsAdmin(data?.role === 'admin');
+    });
+  }, [user]);
+
+  // Load clients (admin only)
+  useEffect(() => {
+    if (!supabase || !user || !isAdmin) return;
+    supabase.from('profiles').select('*').eq('role', 'client').order('name').then(({ data }) => {
+      setClients(data || []);
+    });
+  }, [user, isAdmin]);
+
   // Load data
   const loadData = useCallback(async () => {
     if (!supabase || !user) return;
     setLoading(true);
-    const [{ data: p }, { data: a }] = await Promise.all([
-      supabase.from('precatorios').select('*').order('created_at', { ascending: false }),
-      supabase.from('atividades').select('*').order('created_at', { ascending: false }).limit(100),
-    ]);
+    let pQuery = supabase.from('precatorios').select('*').order('created_at', { ascending: false });
+    let aQuery = supabase.from('atividades').select('*').order('created_at', { ascending: false }).limit(100);
+    // Admin filtering by client
+    if (isAdmin && selectedClient) {
+      pQuery = pQuery.eq('user_id', selectedClient);
+      aQuery = aQuery.eq('user_id', selectedClient);
+    }
+    const [{ data: p }, { data: a }] = await Promise.all([pQuery, aQuery]);
     setPrecatorios(p || []);
     setAtividades(a || []);
     setLoading(false);
-  }, [user]);
+  }, [user, isAdmin, selectedClient]);
 
   useEffect(() => { if (user) loadData(); }, [user, loadData]);
 
@@ -479,6 +503,8 @@ export default function WealthOfficeApp() {
     { id: 'atividades', label: 'Atividades', icon: Icons.activity },
   ];
 
+  const selectedClientName = selectedClient ? (clients.find(c => c.id === selectedClient)?.name || 'Cliente') : 'Todos os Clientes';
+
   return (
     <div style={S.app}>
       {/* SIDEBAR */}
@@ -487,6 +513,20 @@ export default function WealthOfficeApp() {
           <div style={S.logoText}>W.O</div>
           <div style={S.logoSub}>WEALTHOFFICE</div>
         </div>
+
+        {/* ADMIN: Client selector */}
+        {isAdmin && clients.length > 0 && (
+          <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
+            <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 8 }}>Cliente</div>
+            <select style={{ ...S.select, padding: '8px 10px', fontSize: 12, background: 'var(--bg-primary)' }} value={selectedClient || ''} onChange={e => { setSelectedClient(e.target.value || null); }}>
+              <option value="">Todos os Clientes</option>
+              {clients.map(c => (
+                <option key={c.id} value={c.id}>{c.name || c.email}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
         <nav style={S.nav}>
           {navItems.map(n => (
             <button key={n.id} style={S.navItem(tab === n.id || (n.id === 'book' && tab === 'detalhe'))} onClick={() => { setTab(n.id); if (n.id !== 'detalhe') setSelectedId(null); }}>
@@ -495,7 +535,10 @@ export default function WealthOfficeApp() {
           ))}
         </nav>
         <div style={S.sidebarFooter}>
-          <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{profileName}</span>
+          <div>
+            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{profileName}</span>
+            {isAdmin && <span style={{ marginLeft: 8, fontSize: 10, color: 'var(--accent)', fontWeight: 600, padding: '2px 6px', borderRadius: 4, background: 'var(--accent-dim)' }}>ADMIN</span>}
+          </div>
           <button style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4 }} onClick={handleLogout} title="Sair">
             {Icons.settings}
           </button>
