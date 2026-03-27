@@ -1452,7 +1452,29 @@ function DetalheTab({ precatorio, onBack, onSave, onDelete, atividades }) {
               {datajudLoading && <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '12px 0' }}>Consultando tribunal...</div>}
               {datajud && datajud.data && datajud.data.length > 0 && (() => {
                 const proc = datajud.data[0]._source || {};
-                const movs = [...(proc.movimentos || [])].sort((a, b) => new Date(b.dataHora || 0) - new Date(a.dataHora || 0)).slice(0, 8);
+                const allMovs = [...(proc.movimentos || [])].sort((a, b) => new Date(b.dataHora || 0) - new Date(a.dataHora || 0));
+
+                // Keywords that matter for precatórios
+                const KEY_WORDS = ['depósito', 'deposito', 'alvará', 'alvara', 'precatório', 'precatorio', 'rpv', 'expedição', 'expedicao', 'cessão', 'cessao', 'transferência', 'transferencia', 'pagamento', 'requisição', 'requisicao', 'homologação', 'homologacao', 'levantamento', 'ofício requisitório', 'oficio requisitorio', 'trânsito', 'transito em julgado'];
+                const isKeyMov = (m) => {
+                  const txt = ((m.nome || '') + ' ' + (m.descricao || '')).toLowerCase();
+                  return KEY_WORDS.some(k => txt.includes(k));
+                };
+
+                // Filter: key movements + last 3 years
+                const threeYearsAgo = new Date();
+                threeYearsAgo.setFullYear(threeYearsAgo.getFullYear() - 3);
+                const keyMovs = allMovs.filter(m => isKeyMov(m));
+                const recentMovs = allMovs.filter(m => m.dataHora && new Date(m.dataHora) >= threeYearsAgo);
+                // Combine: key movements (any date) + recent ones, deduplicated, max 10
+                const seen = new Set();
+                const relevantMovs = [...keyMovs, ...recentMovs].filter(m => {
+                  const key = (m.nome || '') + (m.dataHora || '');
+                  if (seen.has(key)) return false;
+                  seen.add(key);
+                  return true;
+                }).sort((a, b) => new Date(b.dataHora || 0) - new Date(a.dataHora || 0)).slice(0, 10);
+
                 return (
                   <>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
@@ -1469,7 +1491,7 @@ function DetalheTab({ precatorio, onBack, onSave, onDelete, atividades }) {
                         <div style={{ fontSize: 12, fontWeight: 600 }}>{proc.dataAjuizamento ? new Date(proc.dataAjuizamento).toLocaleDateString('pt-BR') : '—'}</div>
                       </div>
                       <div style={{ padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: 8 }}>
-                        <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>Atualização</div>
+                        <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>Última Atualização</div>
                         <div style={{ fontSize: 12, fontWeight: 600 }}>{proc.dataHoraUltimaAtualizacao ? new Date(proc.dataHoraUltimaAtualizacao).toLocaleDateString('pt-BR') : '—'}</div>
                       </div>
                     </div>
@@ -1479,24 +1501,30 @@ function DetalheTab({ precatorio, onBack, onSave, onDelete, atividades }) {
                         <div style={{ fontSize: 12, fontWeight: 500 }}>{proc.orgaoJulgador.nome}</div>
                       </div>
                     )}
-                    {movs.length > 0 && (
+                    {relevantMovs.length > 0 && (
                       <>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 12 }}>Movimentações Recentes</div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 12 }}>Movimentações Relevantes</div>
                         <div style={{ position: 'relative' }}>
                           <div style={{ position: 'absolute', left: 11, top: 6, bottom: 6, width: 1, background: 'var(--border)' }} />
-                          {movs.map((m, i) => (
-                            <div key={i} style={{ display: 'flex', gap: 12, paddingBottom: i < movs.length - 1 ? 12 : 0, position: 'relative' }}>
-                              <div style={{ width: 22, height: 22, borderRadius: '50%', background: i === 0 ? 'var(--accent-dim)' : 'var(--bg-elevated)', border: i === 0 ? '2px solid var(--accent)' : '2px solid var(--bg-card)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, color: i === 0 ? 'var(--accent)' : 'var(--text-muted)', flexShrink: 0, zIndex: 1 }}>
-                                {i + 1}
-                              </div>
-                              <div style={{ flex: 1, paddingTop: 1 }}>
-                                <div style={{ fontSize: 12, fontWeight: 500, lineHeight: 1.4 }}>{m.nome || 'Movimentação'}</div>
-                                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
-                                  {m.dataHora ? new Date(m.dataHora).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' }) : ''}
+                          {relevantMovs.map((m, i) => {
+                            const isKey = isKeyMov(m);
+                            return (
+                              <div key={i} style={{ display: 'flex', gap: 12, paddingBottom: i < relevantMovs.length - 1 ? 12 : 0, position: 'relative' }}>
+                                <div style={{ width: 22, height: 22, borderRadius: '50%', background: isKey ? 'var(--accent-dim)' : 'var(--bg-elevated)', border: isKey ? '2px solid var(--accent)' : '2px solid var(--bg-card)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, color: isKey ? 'var(--accent)' : 'var(--text-muted)', flexShrink: 0, zIndex: 1 }}>
+                                  {isKey ? '!' : i + 1}
+                                </div>
+                                <div style={{ flex: 1, paddingTop: 1 }}>
+                                  <div style={{ fontSize: 12, fontWeight: isKey ? 600 : 400, lineHeight: 1.4, color: isKey ? 'var(--text-primary)' : 'var(--text-secondary)' }}>{m.nome || 'Movimentação'}</div>
+                                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+                                    {m.dataHora ? new Date(m.dataHora).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' }) : ''}
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          ))}
+                            );
+                          })}
+                        </div>
+                        <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 12, fontStyle: 'italic' }}>
+                          {allMovs.length} movimentações totais · Mostrando relevantes e últimos 3 anos
                         </div>
                       </>
                     )}
@@ -1624,18 +1652,27 @@ function AcompanhamentoTab({ precatorios, onDetail }) {
   const ativos = precatorios.filter(p => p.status !== 'Recebido');
   const recebidos = precatorios.filter(p => p.status === 'Recebido');
 
+  const KEY_WORDS_PREC = ['depósito', 'deposito', 'alvará', 'alvara', 'precatório', 'precatorio', 'rpv', 'expedição', 'expedicao', 'cessão', 'cessao', 'transferência', 'transferencia', 'pagamento', 'requisição', 'requisicao', 'homologação', 'homologacao', 'levantamento', 'trânsito', 'transito em julgado'];
+
   function getLastMov(precId) {
     const dj = datajudResults[precId];
     if (!dj || dj.error || !dj.data || !dj.data.length) return null;
     const proc = dj.data[0]._source || {};
-    const movs = proc.movimentos || [];
+    const allMovs = [...(proc.movimentos || [])].sort((a, b) => new Date(b.dataHora || 0) - new Date(a.dataHora || 0));
+    // Find most recent KEY movement (deposit, payment, etc)
+    const keyMov = allMovs.find(m => {
+      const txt = ((m.nome || '') + ' ' + (m.descricao || '')).toLowerCase();
+      return KEY_WORDS_PREC.some(k => txt.includes(k));
+    });
     return {
-      lastMov: movs[0] || null,
+      lastMov: keyMov || allMovs[0] || null,
+      isKeyMov: !!keyMov,
       tribunal: proc.tribunal || dj.tribunal,
       classe: proc.classe?.nome,
       orgao: proc.orgaoJulgador?.nome,
       lastUpdate: proc.dataHoraUltimaAtualizacao,
-      totalMovs: movs.length,
+      totalMovs: allMovs.length,
+      totalKeyMovs: allMovs.filter(m => KEY_WORDS_PREC.some(k => ((m.nome || '') + ' ' + (m.descricao || '')).toLowerCase().includes(k))).length,
     };
   }
 
@@ -1719,12 +1756,16 @@ function AcompanhamentoTab({ precatorios, onDetail }) {
                     </div>
                     {info.lastMov && (
                       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--accent)', marginTop: 5, flexShrink: 0 }} />
+                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: info.isKeyMov ? 'var(--accent)' : 'var(--text-muted)', marginTop: 5, flexShrink: 0 }} />
                         <div>
-                          <div style={{ fontSize: 13, fontWeight: 500 }}>{info.lastMov.nome || 'Movimentação'}</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 13, fontWeight: info.isKeyMov ? 600 : 400 }}>{info.lastMov.nome || 'Movimentação'}</span>
+                            {info.isKeyMov && <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--accent)', background: 'var(--accent-dim)', padding: '2px 6px', borderRadius: 4, textTransform: 'uppercase' }}>Relevante</span>}
+                          </div>
                           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
                             {info.lastMov.dataHora ? new Date(info.lastMov.dataHora).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' }) : ''}
-                            {info.totalMovs > 1 && <span> · +{info.totalMovs - 1} movimentações anteriores</span>}
+                            {info.totalKeyMovs > 1 && <span> · {info.totalKeyMovs} mov. relevantes de {info.totalMovs} total</span>}
+                            {!info.totalKeyMovs && info.totalMovs > 1 && <span> · {info.totalMovs} movimentações</span>}
                           </div>
                         </div>
                       </div>
