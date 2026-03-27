@@ -774,14 +774,20 @@ export default function WealthOfficeApp() {
     let updated = 0, notFound = 0, notFoundList = [];
     const usedIds = new Set();
 
+    console.log('Batch update: precatorios loaded =', precatorios.length, precatorios.map(p => ({ c: (p.cedente||'').substring(0,20), d: p.desembolso })));
+
     for (const upd of FULL_DATA) {
-      // Match by cedente name (normalized, accent-stripped)
       const updNorm = norm(upd.cedente);
-      let match = precatorios.find(p => !usedIds.has(p.id) && norm(p.cedente) === updNorm);
-      // Fallback: partial match on first 12 chars
-      if (!match) match = precatorios.find(p => !usedIds.has(p.id) && norm(p.cedente).includes(updNorm.substring(0, 12)));
-      // Fallback: match by desembolso (exact)
-      if (!match) match = precatorios.find(p => !usedIds.has(p.id) && Math.abs(Number(p.desembolso || 0) - upd.desembolso) < 1);
+      // Try 1: exact desembolso match (most reliable, unique per precatorio)
+      let match = precatorios.find(p => !usedIds.has(p.id) && Math.abs(Number(p.desembolso || 0) - upd.desembolso) < 5);
+      // Try 2: cedente name exact (normalized)
+      if (!match) match = precatorios.find(p => !usedIds.has(p.id) && norm(p.cedente) === updNorm);
+      // Try 3: cedente partial (first 10 chars)
+      if (!match) match = precatorios.find(p => !usedIds.has(p.id) && updNorm.length > 5 && norm(p.cedente).includes(updNorm.substring(0, 10)));
+      // Try 4: valor_nominal match
+      if (!match) match = precatorios.find(p => !usedIds.has(p.id) && Math.abs(Number(p.valor_nominal || 0) - upd.valor_nominal) < 5);
+
+      console.log(`Match "${upd.cedente.substring(0,20)}": ${match ? 'FOUND ' + match.cedente?.substring(0,20) : 'NOT FOUND'} (desembolso ${upd.desembolso})`);
 
       if (match) {
         usedIds.add(match.id);
