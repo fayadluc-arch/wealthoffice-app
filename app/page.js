@@ -1234,14 +1234,27 @@ function DetalheTab({ precatorio, onBack, onSave, onDelete, atividades }) {
   const [form, setForm] = useState({});
   const [saving, setSaving] = useState(false);
   const originalRef = useRef({});
+  const [datajud, setDatajud] = useState(null);
+  const [datajudLoading, setDatajudLoading] = useState(false);
 
   useEffect(() => {
     if (precatorio) {
       const data = { ...precatorio };
       setForm(data);
       originalRef.current = { ...data };
+      // Auto-fetch DataJud if has CNJ
+      if (precatorio.cnj) fetchDatajud(precatorio.cnj);
     }
   }, [precatorio]);
+
+  async function fetchDatajud(cnj) {
+    setDatajudLoading(true);
+    try {
+      const res = await fetch('/api/datajud', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cnj }) });
+      if (res.ok) { const json = await res.json(); setDatajud(json); }
+    } catch {}
+    setDatajudLoading(false);
+  }
 
   if (!precatorio) return <div style={S.emptyState}>Precatório não encontrado</div>;
 
@@ -1372,6 +1385,73 @@ function DetalheTab({ precatorio, onBack, onSave, onDelete, atividades }) {
               </div>
             </div>
           </div>
+
+          {/* DataJud - Status Judicial */}
+          {form.cnj && (
+            <div style={S.card}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, fontFamily: 'var(--font-serif)' }}>Status Judicial</div>
+                <span style={S.badge('var(--accent)')}>DataJud</span>
+              </div>
+              {datajudLoading && <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '12px 0' }}>Consultando tribunal...</div>}
+              {datajud && datajud.data && datajud.data.length > 0 && (() => {
+                const proc = datajud.data[0]._source || {};
+                const movs = (proc.movimentos || []).slice(0, 8);
+                return (
+                  <>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
+                      <div style={{ padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: 8 }}>
+                        <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>Tribunal</div>
+                        <div style={{ fontSize: 12, fontWeight: 600 }}>{proc.tribunal || datajud.tribunal}</div>
+                      </div>
+                      <div style={{ padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: 8 }}>
+                        <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>Classe</div>
+                        <div style={{ fontSize: 12, fontWeight: 600 }}>{proc.classe?.nome || '—'}</div>
+                      </div>
+                      <div style={{ padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: 8 }}>
+                        <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>Ajuizamento</div>
+                        <div style={{ fontSize: 12, fontWeight: 600 }}>{proc.dataAjuizamento ? new Date(proc.dataAjuizamento).toLocaleDateString('pt-BR') : '—'}</div>
+                      </div>
+                      <div style={{ padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: 8 }}>
+                        <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>Atualização</div>
+                        <div style={{ fontSize: 12, fontWeight: 600 }}>{proc.dataHoraUltimaAtualizacao ? new Date(proc.dataHoraUltimaAtualizacao).toLocaleDateString('pt-BR') : '—'}</div>
+                      </div>
+                    </div>
+                    {proc.orgaoJulgador?.nome && (
+                      <div style={{ padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: 8, marginBottom: 16 }}>
+                        <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>Órgão Julgador</div>
+                        <div style={{ fontSize: 12, fontWeight: 500 }}>{proc.orgaoJulgador.nome}</div>
+                      </div>
+                    )}
+                    {movs.length > 0 && (
+                      <>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 12 }}>Movimentações Recentes</div>
+                        <div style={{ position: 'relative' }}>
+                          <div style={{ position: 'absolute', left: 11, top: 6, bottom: 6, width: 1, background: 'var(--border)' }} />
+                          {movs.map((m, i) => (
+                            <div key={i} style={{ display: 'flex', gap: 12, paddingBottom: i < movs.length - 1 ? 12 : 0, position: 'relative' }}>
+                              <div style={{ width: 22, height: 22, borderRadius: '50%', background: i === 0 ? 'var(--accent-dim)' : 'var(--bg-elevated)', border: i === 0 ? '2px solid var(--accent)' : '2px solid var(--bg-card)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, color: i === 0 ? 'var(--accent)' : 'var(--text-muted)', flexShrink: 0, zIndex: 1 }}>
+                                {i + 1}
+                              </div>
+                              <div style={{ flex: 1, paddingTop: 1 }}>
+                                <div style={{ fontSize: 12, fontWeight: 500, lineHeight: 1.4 }}>{m.nome || 'Movimentação'}</div>
+                                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+                                  {m.dataHora ? new Date(m.dataHora).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' }) : ''}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </>
+                );
+              })()}
+              {datajud && (!datajud.data || datajud.data.length === 0) && !datajudLoading && (
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '8px 0' }}>Não encontrado no DataJud</div>
+              )}
+            </div>
+          )}
 
           {/* Activity Timeline */}
           {atividades && atividades.length > 0 && (
