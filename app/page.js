@@ -766,15 +766,40 @@ export default function WealthOfficeApp() {
       { cnj_part: '0416046', cedente_part: 'Maria Aparecida Ribeiro', status: 'Homologação', credito_atualizado: 699335.10, valor_receber: 409111.03, retorno: 0.989527, prazo_decorrido: 0.2, prazo_estimado: '24-36 meses', ordem_cronologica: '2028' },
     ];
 
-    let updated = 0, notFound = 0;
+    // Normalize: strip accents for matching
+    const norm = (s) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+    // Strip all non-digits from CNJ for matching
+    const cnjDigits = (s) => (s || '').replace(/\D/g, '');
+
+    let updated = 0, notFound = 0, notFoundList = [];
+    const usedIds = new Set(); // avoid double-matching
+
     for (const upd of UPDATES) {
-      // Find matching precatorio by CNJ partial + cedente partial
-      const match = precatorios.find(p =>
-        (p.cnj || '').includes(upd.cnj_part) &&
-        (p.cedente || '').toLowerCase().includes(upd.cedente_part.toLowerCase())
+      // Try CNJ + cedente match first (strict)
+      let match = precatorios.find(p =>
+        !usedIds.has(p.id) &&
+        cnjDigits(p.cnj).includes(upd.cnj_part.replace(/\D/g, '')) &&
+        norm(p.cedente).includes(norm(upd.cedente_part))
       );
 
+      // Fallback: match just by desembolso + cnj (for encoding issues)
+      if (!match) {
+        match = precatorios.find(p =>
+          !usedIds.has(p.id) &&
+          cnjDigits(p.cnj).includes(upd.cnj_part.replace(/\D/g, ''))
+        );
+        // If multiple matches on same CNJ, try matching by desembolso proximity
+        if (!match) {
+          const cnjMatches = precatorios.filter(p =>
+            !usedIds.has(p.id) &&
+            cnjDigits(p.cnj).includes(upd.cnj_part.replace(/\D/g, ''))
+          );
+          if (cnjMatches.length > 0) match = cnjMatches[0];
+        }
+      }
+
       if (match) {
+        usedIds.add(match.id);
         const updateData = {
           status: upd.status, credito_atualizado: upd.credito_atualizado,
           valor_receber: upd.valor_receber, retorno: upd.retorno,
@@ -786,13 +811,15 @@ export default function WealthOfficeApp() {
 
         const { error } = await supabase.from('precatorios').update(updateData).eq('id', match.id);
         if (!error) updated++;
+        else console.log('Update error:', match.cedente, error.message);
       } else {
         notFound++;
-        console.log('Not found:', upd.cedente_part, upd.cnj_part);
+        notFoundList.push(upd.cedente_part);
+        console.log('Not found:', upd.cedente_part, upd.cnj_part, '| Available CNJs:', precatorios.map(p => cnjDigits(p.cnj)).join(', '));
       }
     }
 
-    alert(`Atualização concluída: ${updated} atualizados, ${notFound} não encontrados`);
+    alert(`Atualização: ${updated} atualizados, ${notFound} não encontrados${notFoundList.length ? '\n\nNão encontrados: ' + notFoundList.join(', ') : ''}`);
     await loadData();
   }
 
@@ -817,8 +844,8 @@ export default function WealthOfficeApp() {
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: Icons.dashboard },
-    { id: 'book', label: 'Book de Precatórios', icon: Icons.book },
-    { id: 'buscar', label: 'Buscar Processo', icon: Icons.search },
+    { id: 'book', label: 'Book', icon: Icons.book },
+    { id: 'acompanhamento', label: 'Acompanhamento', icon: Icons.search },
     { id: 'novo', label: 'Novo Precatório', icon: Icons.plus },
     { id: 'atividades', label: 'Atividades', icon: Icons.activity },
   ];
@@ -892,7 +919,7 @@ export default function WealthOfficeApp() {
         {tab === 'dashboard' && <DashboardTab precatorios={precatorios} onNavigate={setTab} isAdmin={isAdmin} onBatchUpdate={batchUpdateReport24032026} />}
         {tab === 'book' && <BookTab precatorios={precatorios} onDetail={openDetail} onExport={exportCSV} onNavigate={setTab} onDelete={id => setDeleteConfirm(id)} />}
         {tab === 'detalhe' && <DetalheTab precatorio={precatorios.find(p => p.id === selectedId)} onBack={() => setTab('book')} onSave={updatePrecatorio} onDelete={id => setDeleteConfirm(id)} atividades={atividades.filter(a => a.precatorio_id === selectedId)} />}
-        {tab === 'buscar' && <BuscarTab precatorios={precatorios} onDetail={openDetail} />}
+        {tab === 'acompanhamento' && <AcompanhamentoTab precatorios={precatorios} onDetail={openDetail} />}
         {tab === 'novo' && <NovoTab onCreate={createPrecatorio} />}
         {tab === 'atividades' && <AtividadesTab atividades={atividades} precatorios={precatorios} />}
       </main>
@@ -1187,32 +1214,43 @@ function BookTab({ precatorios, onDetail, onExport, onNavigate, onDelete }) {
           <thead>
             <tr>
               <th style={S.th()}>#</th>
+              <th style={S.th(true)} onClick={() => handleSort('cedente')}>Cedente / Devedor {sortCol === 'cedente' && (sortDir === 'asc' ? '↑' : '↓')}</th>
+              <th style={S.th()}>Nº Processo (CNJ)</th>
               <th style={S.th(true)} onClick={() => handleSort('esfera')}>Esfera {sortCol === 'esfera' && (sortDir === 'asc' ? '↑' : '↓')}</th>
-              <th style={S.th(true)} onClick={() => handleSort('devedor')}>Devedor {sortCol === 'devedor' && (sortDir === 'asc' ? '↑' : '↓')}</th>
-              <th style={S.th(true)} onClick={() => handleSort('cedente')}>Cedente {sortCol === 'cedente' && (sortDir === 'asc' ? '↑' : '↓')}</th>
-              <th style={S.th()}>Processo</th>
               <th style={S.th(true)} onClick={() => handleSort('status')}>Status {sortCol === 'status' && (sortDir === 'asc' ? '↑' : '↓')}</th>
               <th style={S.th()}>Prazo</th>
               <th style={S.th(true)} onClick={() => handleSort('desembolso')}>Desembolso {sortCol === 'desembolso' && (sortDir === 'asc' ? '↑' : '↓')}</th>
+              <th style={S.th(true)} onClick={() => handleSort('valor_receber')}>A Receber {sortCol === 'valor_receber' && (sortDir === 'asc' ? '↑' : '↓')}</th>
+              <th style={S.th()}>Retorno</th>
               <th style={S.th()}></th>
             </tr>
           </thead>
           <tbody>
-            {filtered.map((p, i) => (
-              <tr key={p.id} style={S.row(true)} onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-card-hover)'} onMouseLeave={e => e.currentTarget.style.background = ''} onClick={() => onDetail(p.id)}>
-                <td style={{ ...S.td, color: 'var(--text-muted)', fontSize: 12, fontWeight: 500 }}>{i + 1}</td>
-                <td style={S.td}><span style={S.badge(p.esfera === 'Estadual' ? 'var(--blue)' : p.esfera === 'Federal' ? 'var(--green)' : 'var(--accent)')}>{p.esfera}</span></td>
-                <td style={{ ...S.td, fontWeight: 500 }}>{p.devedor}</td>
-                <td style={{ ...S.td, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--text-secondary)' }}>{p.cedente}</td>
-                <td style={{ ...S.td, fontFamily: 'monospace', fontSize: 11.5, color: 'var(--text-muted)' }}>{p.cnj || '—'}</td>
-                <td style={S.td}><span style={S.badge(STATUS_COLORS[p.status] || 'var(--text-muted)')}>{p.status}</span></td>
-                <td style={S.td}><span style={S.badge(PRAZO_COLORS[p.prazo_estimado] || 'var(--text-muted)')}>{p.prazo_estimado}</span></td>
-                <td style={{ ...S.td, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmtBRL(p.desembolso)}</td>
-                <td style={S.td} onClick={e => { e.stopPropagation(); onDelete(p.id); }}>
-                  <span style={{ color: 'var(--text-muted)', cursor: 'pointer', opacity: 0.5, transition: 'opacity 0.2s' }} onMouseEnter={e => e.currentTarget.style.opacity = '1'} onMouseLeave={e => e.currentTarget.style.opacity = '0.5'}>{Icons.trash}</span>
-                </td>
-              </tr>
-            ))}
+            {filtered.map((p, i) => {
+              const ret = Number(p.retorno || 0);
+              return (
+                <tr key={p.id} style={S.row(true)} onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-card-hover)'} onMouseLeave={e => e.currentTarget.style.background = ''} onClick={() => onDetail(p.id)}>
+                  <td style={{ ...S.td, color: 'var(--text-muted)', fontSize: 12, fontWeight: 500 }}>{i + 1}</td>
+                  <td style={S.td}>
+                    <div style={{ fontWeight: 600, fontSize: 13 }}>{p.cedente}</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 2 }}>vs {p.devedor}</div>
+                  </td>
+                  <td style={S.td}>
+                    <div style={{ fontFamily: "'Courier New', monospace", fontSize: 12, color: 'var(--text-primary)', fontWeight: 500, letterSpacing: '0.02em' }}>{p.cnj || '—'}</div>
+                    {p.tribunal && <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 2 }}>{p.tribunal}</div>}
+                  </td>
+                  <td style={S.td}><span style={S.badge(p.esfera === 'Estadual' ? 'var(--blue)' : p.esfera === 'Federal' ? 'var(--green)' : 'var(--accent)')}>{p.esfera}</span></td>
+                  <td style={S.td}><span style={S.badge(STATUS_COLORS[p.status] || 'var(--text-muted)')}>{p.status}</span></td>
+                  <td style={S.td}><span style={S.badge(PRAZO_COLORS[p.prazo_estimado] || 'var(--text-muted)')}>{p.prazo_estimado}</span></td>
+                  <td style={{ ...S.td, fontWeight: 500, fontVariantNumeric: 'tabular-nums', fontSize: 13 }}>{fmtBRL(p.desembolso)}</td>
+                  <td style={{ ...S.td, fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: 13, color: 'var(--accent-light)' }}>{fmtBRL(p.valor_receber)}</td>
+                  <td style={{ ...S.td, fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: 13, color: ret > 0 ? 'var(--green)' : 'var(--text-muted)' }}>{fmtPct(ret)}</td>
+                  <td style={S.td} onClick={e => { e.stopPropagation(); onDelete(p.id); }}>
+                    <span style={{ color: 'var(--text-muted)', cursor: 'pointer', opacity: 0.4, transition: 'opacity 0.2s' }} onMouseEnter={e => e.currentTarget.style.opacity = '1'} onMouseLeave={e => e.currentTarget.style.opacity = '0.4'}>{Icons.trash}</span>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
         {filtered.length === 0 && (
@@ -1490,197 +1528,198 @@ function DetalheTab({ precatorio, onBack, onSave, onDelete, atividades }) {
 // ============================================================
 // BUSCAR TAB
 // ============================================================
-function BuscarTab({ precatorios, onDetail }) {
-  const [cnj, setCnj] = useState('');
-  const [results, setResults] = useState(null);
-  const [datajudData, setDatajudData] = useState(null);
-  const [datajudLoading, setDatajudLoading] = useState(false);
-  const [datajudError, setDatajudError] = useState('');
+function AcompanhamentoTab({ precatorios, onDetail }) {
+  const [datajudResults, setDatajudResults] = useState({});
+  const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
-  function handleBuscar() {
-    if (!cnj.trim()) return;
-    const q = cnj.trim().toLowerCase();
-    setResults(precatorios.filter(p => (p.cnj || '').toLowerCase().includes(q)));
-    setDatajudData(null);
-    setDatajudError('');
-    // Auto-query DataJud
-    handleDatajud(cnj.trim());
-  }
+  // Auto-fetch all processes on mount
+  useEffect(() => {
+    if (loaded || precatorios.length === 0) return;
+    fetchAll();
+  }, [precatorios]);
 
-  async function handleDatajud(cnjNum) {
-    if (!cnjNum) return;
-    setDatajudLoading(true);
-    setDatajudError('');
-    try {
-      const res = await fetch('/api/datajud', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cnj: cnjNum }),
+  async function fetchAll() {
+    setLoading(true);
+    const withCnj = precatorios.filter(p => p.cnj && p.cnj.trim().length > 10);
+    const results = {};
+
+    // Fetch in batches of 3 to avoid rate limiting
+    for (let i = 0; i < withCnj.length; i += 3) {
+      const batch = withCnj.slice(i, i + 3);
+      const promises = batch.map(async (p) => {
+        try {
+          const res = await fetch('/api/datajud', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cnj: p.cnj }),
+          });
+          if (res.ok) {
+            const json = await res.json();
+            results[p.id] = json;
+          } else {
+            results[p.id] = { error: true };
+          }
+        } catch {
+          results[p.id] = { error: true };
+        }
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Erro ao consultar DataJud');
-      setDatajudData(json);
-    } catch (err) {
-      setDatajudError(err.message);
+      await Promise.all(promises);
+      setDatajudResults({ ...results }); // update progressively
     }
-    setDatajudLoading(false);
+
+    setDatajudResults(results);
+    setLoading(false);
+    setLoaded(true);
   }
 
-  // Parse DataJud movimentacoes into timeline
-  function renderMovimentacoes(hits) {
-    if (!hits || hits.length === 0) return null;
-    const processo = hits[0]._source || {};
-    const movs = (processo.movimentos || []).slice(0, 20);
-    const assuntos = processo.assuntos || [];
-    const classe = processo.classe || {};
+  const ativos = precatorios.filter(p => p.status !== 'Recebido');
+  const recebidos = precatorios.filter(p => p.status === 'Recebido');
 
-    return (
-      <div>
-        {/* Process info */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 24 }}>
-          {[
-            { label: 'Classe', value: classe.nome || '—' },
-            { label: 'Tribunal', value: processo.tribunal || '—' },
-            { label: 'Grau', value: processo.grau || '—' },
-            { label: 'Órgão Julgador', value: processo.orgaoJulgador?.nome || '—' },
-            { label: 'Data Ajuizamento', value: processo.dataAjuizamento ? new Date(processo.dataAjuizamento).toLocaleDateString('pt-BR') : '—' },
-            { label: 'Última Atualização', value: processo.dataHoraUltimaAtualizacao ? new Date(processo.dataHoraUltimaAtualizacao).toLocaleDateString('pt-BR') : '—' },
-          ].map(item => (
-            <div key={item.label} style={{ padding: '12px 16px', background: 'var(--bg-surface)', borderRadius: 10, border: '1px solid var(--border)' }}>
-              <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>{item.label}</div>
-              <div style={{ fontSize: 13, fontWeight: 500 }}>{item.value}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* Assuntos */}
-        {assuntos.length > 0 && (
-          <div style={{ marginBottom: 24 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 10 }}>Assuntos</div>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {assuntos.map((a, i) => (
-                <span key={i} style={S.badge('var(--blue)')}>{a.nome || a.codigo}</span>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Movimentações timeline */}
-        {movs.length > 0 && (
-          <div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 16 }}>Últimas Movimentações</div>
-            <div style={{ position: 'relative' }}>
-              <div style={{ position: 'absolute', left: 15, top: 8, bottom: 8, width: 1, background: 'var(--border)' }} />
-              {movs.map((m, i) => (
-                <div key={i} style={{ display: 'flex', gap: 14, paddingBottom: i < movs.length - 1 ? 16 : 0, position: 'relative' }}>
-                  <div style={{ width: 30, height: 30, borderRadius: '50%', background: i === 0 ? 'var(--accent-dim)' : 'var(--bg-elevated)', border: i === 0 ? '2px solid var(--accent)' : '2px solid var(--bg-card)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: i === 0 ? 'var(--accent)' : 'var(--text-muted)', flexShrink: 0, zIndex: 1 }}>
-                    {i + 1}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0, paddingTop: 2 }}>
-                    <div style={{ fontSize: 13, fontWeight: 500, lineHeight: 1.5 }}>{m.nome || m.descricao || 'Movimentação'}</div>
-                    {m.complementosTabelados && m.complementosTabelados.length > 0 && (
-                      <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', marginTop: 4 }}>
-                        {m.complementosTabelados.map(c => c.nome || c.descricao).join(', ')}
-                      </div>
-                    )}
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-                      {m.dataHora ? new Date(m.dataHora).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    );
+  function getLastMov(precId) {
+    const dj = datajudResults[precId];
+    if (!dj || dj.error || !dj.data || !dj.data.length) return null;
+    const proc = dj.data[0]._source || {};
+    const movs = proc.movimentos || [];
+    return {
+      lastMov: movs[0] || null,
+      tribunal: proc.tribunal || dj.tribunal,
+      classe: proc.classe?.nome,
+      orgao: proc.orgaoJulgador?.nome,
+      lastUpdate: proc.dataHoraUltimaAtualizacao,
+      totalMovs: movs.length,
+    };
   }
 
   return (
     <>
       <div style={S.header}>
         <div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', letterSpacing: '2px', textTransform: 'uppercase', marginBottom: 8 }}>Consulta</div>
-          <div style={S.pageTitle}>Buscar Processo</div>
-          <div style={S.pageSub}>Consulte pelo CNJ — busca no book e no DataJud (CNJ) automaticamente</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', letterSpacing: '2px', textTransform: 'uppercase', marginBottom: 8 }}>Tracking Judicial</div>
+          <div style={S.pageTitle}>Acompanhamento</div>
+          <div style={S.pageSub}>Status judicial de todos os processos do book via DataJud (CNJ)</div>
         </div>
-      </div>
-
-      <div style={S.card}>
-        <label style={S.label}>Número do Processo (CNJ)</label>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <input style={{ ...S.input, flex: 1 }} value={cnj} onChange={e => setCnj(e.target.value)} placeholder="Ex: 0423510-23.1997.8.26.0053" onKeyDown={e => e.key === 'Enter' && handleBuscar()} />
-          <button style={S.btn('primary')} onClick={handleBuscar} disabled={datajudLoading}>
-            {datajudLoading ? 'Consultando...' : <>{Icons.search} Buscar</>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {loading && <span style={{ fontSize: 12, color: 'var(--accent)' }}>Consultando tribunais...</span>}
+          <button style={S.btn('default')} onClick={() => { setLoaded(false); fetchAll(); }} disabled={loading}>
+            {Icons.search} {loading ? 'Atualizando...' : 'Atualizar'}
           </button>
         </div>
-        <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 8 }}>Formato CNJ unificado: 0000000-00.0000.0.00.0000</div>
       </div>
 
-      {/* Book results */}
-      {results !== null && results.length > 0 && (
-        <div style={S.card}>
-          <div style={{ fontWeight: 700, marginBottom: 16, fontFamily: 'var(--font-serif)', fontSize: 15 }}>
-            <span style={{ color: 'var(--accent)' }}>No seu Book</span> — {results.length} encontrado{results.length > 1 ? 's' : ''}
+      {/* Progress */}
+      {loading && (
+        <div style={{ marginBottom: 20, padding: '12px 20px', background: 'var(--accent-dim)', borderRadius: 12, border: '1px solid rgba(46,158,110,0.15)', fontSize: 13, color: 'var(--accent-light)' }}>
+          Consultando {Object.keys(datajudResults).length} de {precatorios.filter(p => p.cnj).length} processos no DataJud...
+        </div>
+      )}
+
+      {/* Active processes */}
+      {ativos.length > 0 && (
+        <>
+          <div style={{ fontSize: 14, fontWeight: 700, fontFamily: 'var(--font-serif)', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
+            Processos Ativos
+            <span style={S.badge('var(--accent)')}>{ativos.length}</span>
           </div>
-          {results.map(p => (
-            <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 0', borderBottom: '1px solid var(--border)', cursor: 'pointer', transition: 'all 0.2s' }} onClick={() => onDetail(p.id)} onMouseEnter={e => e.currentTarget.style.paddingLeft = '8px'} onMouseLeave={e => e.currentTarget.style.paddingLeft = '0'}>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: 14 }}>{p.cedente} vs {p.devedor}</div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'monospace', marginTop: 4 }}>{p.cnj}</div>
+          {ativos.map(p => {
+            const info = getLastMov(p.id);
+            return (
+              <div key={p.id} style={{ ...S.card, cursor: 'pointer', marginBottom: 14 }} onClick={() => onDetail(p.id)}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-light)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = ''; e.currentTarget.style.transform = ''; }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>{p.cedente}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>vs {p.devedor} — {p.esfera}</div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <span style={S.badge(STATUS_COLORS[p.status] || 'var(--text-muted)')}>{p.status}</span>
+                    <span style={S.badge(PRAZO_COLORS[p.prazo_estimado] || 'var(--text-muted)')}>{p.prazo_estimado}</span>
+                  </div>
+                </div>
+
+                {/* CNJ + Financial */}
+                <div style={{ display: 'flex', gap: 24, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
+                  <div>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 2 }}>Processo</div>
+                    <div style={{ fontFamily: "'Courier New', monospace", fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{p.cnj || '—'}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 2 }}>Desembolso</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmtBRL(p.desembolso)}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 2 }}>A Receber</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: 'var(--accent-light)' }}>{fmtBRL(p.valor_receber)}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 2 }}>Retorno</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--green)' }}>{fmtPct(p.retorno)}</div>
+                  </div>
+                </div>
+
+                {/* DataJud info */}
+                {info ? (
+                  <div style={{ padding: '14px 16px', background: 'var(--bg-surface)', borderRadius: 10, border: '1px solid var(--border)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '1px' }}>DataJud</span>
+                        {info.tribunal && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{info.tribunal}</span>}
+                        {info.classe && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>· {info.classe}</span>}
+                      </div>
+                      {info.lastUpdate && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Atualizado: {new Date(info.lastUpdate).toLocaleDateString('pt-BR')}</span>}
+                    </div>
+                    {info.lastMov && (
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--accent)', marginTop: 5, flexShrink: 0 }} />
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 500 }}>{info.lastMov.nome || 'Movimentação'}</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                            {info.lastMov.dataHora ? new Date(info.lastMov.dataHora).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' }) : ''}
+                            {info.totalMovs > 1 && <span> · +{info.totalMovs - 1} movimentações anteriores</span>}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    {info.orgao && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>{info.orgao}</div>}
+                  </div>
+                ) : datajudResults[p.id]?.error ? (
+                  <div style={{ padding: '10px 16px', background: 'var(--bg-surface)', borderRadius: 10, border: '1px solid var(--border)', fontSize: 12, color: 'var(--text-muted)' }}>
+                    DataJud: não encontrado no tribunal
+                  </div>
+                ) : p.cnj ? (
+                  <div style={{ padding: '10px 16px', background: 'var(--bg-surface)', borderRadius: 10, border: '1px solid var(--border)', fontSize: 12, color: 'var(--text-muted)' }}>
+                    {loading ? 'Consultando...' : 'Aguardando consulta'}
+                  </div>
+                ) : null}
               </div>
-              <span style={S.badge(STATUS_COLORS[p.status])}>{p.status}</span>
+            );
+          })}
+        </>
+      )}
+
+      {/* Received */}
+      {recebidos.length > 0 && (
+        <>
+          <div style={{ fontSize: 14, fontWeight: 700, fontFamily: 'var(--font-serif)', marginTop: 32, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
+            Recebidos
+            <span style={S.badge('var(--green)')}>{recebidos.length}</span>
+          </div>
+          {recebidos.map(p => (
+            <div key={p.id} style={{ ...S.card, cursor: 'pointer', marginBottom: 10, opacity: 0.7 }} onClick={() => onDetail(p.id)}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>{p.cedente} <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>vs {p.devedor}</span></div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'monospace', marginTop: 4 }}>{p.cnj}</div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--green)' }}>{fmtBRL(p.valor_receber)}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Recebido{p.data_recebimento ? ` em ${new Date(p.data_recebimento).toLocaleDateString('pt-BR')}` : ''}</div>
+                </div>
+              </div>
             </div>
           ))}
-        </div>
-      )}
-
-      {/* DataJud results */}
-      {datajudLoading && (
-        <div style={{ ...S.card, textAlign: 'center', padding: '40px 20px' }}>
-          <div style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 8 }}>Consultando DataJud (CNJ)...</div>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Buscando movimentações do processo nos tribunais</div>
-        </div>
-      )}
-
-      {datajudError && (
-        <div style={{ ...S.card, border: '1px solid rgba(248,113,113,0.2)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--red)', fontSize: 13 }}>
-            <span style={{ fontWeight: 600 }}>DataJud:</span> {datajudError}
-          </div>
-        </div>
-      )}
-
-      {datajudData && datajudData.data && datajudData.data.length > 0 && (
-        <div style={S.card}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-            <div>
-              <div style={{ fontWeight: 700, fontFamily: 'var(--font-serif)', fontSize: 15 }}>
-                <span style={{ color: 'var(--accent)' }}>DataJud</span> — Dados do Tribunal
-              </div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-                Fonte: {datajudData.tribunal} — {datajudData.total} resultado{datajudData.total > 1 ? 's' : ''}
-              </div>
-            </div>
-            <span style={S.badge('var(--accent)')}>CNJ Oficial</span>
-          </div>
-          {renderMovimentacoes(datajudData.data)}
-        </div>
-      )}
-
-      {datajudData && (!datajudData.data || datajudData.data.length === 0) && !datajudError && (
-        <div style={{ ...S.card, textAlign: 'center', padding: '40px 20px' }}>
-          <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>Processo não encontrado no DataJud</div>
-        </div>
-      )}
-
-      {/* Initial empty state */}
-      {results === null && !datajudLoading && (
-        <div style={{ ...S.card, ...S.emptyState }}>
-          <div style={{ marginBottom: 16, opacity: 0.2 }}>{Icons.search}</div>
-          <div style={{ fontSize: 14 }}>Digite o número do processo acima para buscar</div>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>A consulta busca simultaneamente no seu book e no DataJud (CNJ)</div>
-        </div>
+        </>
       )}
     </>
   );
