@@ -734,6 +734,68 @@ export default function WealthOfficeApp() {
     a.click(); URL.revokeObjectURL(url);
   }
 
+  // Admin: Batch update from report 24032026
+  async function batchUpdateReport24032026() {
+    if (!supabase || !isAdmin) return;
+    const UPDATES = [
+      { cnj_part: '0423510', cedente_part: 'Maria de Lourdes', status: 'Recebido', credito_atualizado: 66396.43, valor_receber: 66396.43, retorno: 0.542563, prazo_decorrido: 15.03, tir: 0.413385, data_recebimento: '2025-09-25', prazo_estimado: 'Recebido', ordem_cronologica: 'Depositado' },
+      { cnj_part: '1050219', cedente_part: 'Yara Pereira', status: 'Recebido', credito_atualizado: 179115.58, valor_receber: 102095.88, retorno: 0.398392, prazo_decorrido: 8.53, tir: 0.602473, data_recebimento: '2025-05-19', prazo_estimado: 'Recebido', ordem_cronologica: '2025' },
+      { cnj_part: '0956450', cedente_part: 'Sebastião de Paula', status: 'Transferência', credito_atualizado: 292867.02, valor_receber: 292867.02, retorno: 0.43096, prazo_decorrido: 22.67, prazo_estimado: '0-6 meses', ordem_cronologica: 'Depositado' },
+      { cnj_part: '0018308', cedente_part: 'Luiz Fernando', status: 'Transferência', credito_atualizado: 286241.83, valor_receber: 271929.74, retorno: 0.461641, prazo_decorrido: 20.4, prazo_estimado: '0-6 meses', ordem_cronologica: '2026' },
+      { cnj_part: '0416823', cedente_part: 'Rosangela de Oliveira', status: 'Transferência', credito_atualizado: 105629.27, valor_receber: 75260.86, retorno: 0.553639, prazo_decorrido: 19.23, prazo_estimado: '0-6 meses', ordem_cronologica: '2012' },
+      { cnj_part: '0602624', cedente_part: 'Iara Aparecida', status: 'Transferência', credito_atualizado: 82157.54, valor_receber: 46829.80, retorno: 0.421156, prazo_decorrido: 18.2, prazo_estimado: '0-6 meses', ordem_cronologica: '2025' },
+      { cnj_part: '0602624', cedente_part: 'Jussara Christina', status: 'Transferência', credito_atualizado: 70987.10, valor_receber: 40462.65, retorno: 0.421156, prazo_decorrido: 18.2, prazo_estimado: '0-6 meses', ordem_cronologica: '2025' },
+      { cnj_part: '1048618', cedente_part: 'Maria Regina Darin', status: 'Transferência', credito_atualizado: 363074.81, valor_receber: 206952.64, retorno: 0.553581, prazo_decorrido: 18.2, prazo_estimado: '0-6 meses', ordem_cronologica: '2024' },
+      { cnj_part: '0410229', cedente_part: 'Saverio', status: 'Transferência', credito_atualizado: 230388.59, valor_receber: 172791.44, retorno: 0.984333, prazo_decorrido: 18.2, prazo_estimado: '0-6 meses', ordem_cronologica: '2011' },
+      { cnj_part: '0404044', cedente_part: 'Jane Rosa', status: 'Transferência', credito_atualizado: 127356.66, valor_receber: 120988.83, retorno: 0.969427, prazo_decorrido: 15.23, prazo_estimado: '0-6 meses', ordem_cronologica: 'Depositado' },
+      { cnj_part: '1048618', cedente_part: 'Rosangela Domingues', status: 'Transferência', credito_atualizado: 81742.21, valor_receber: 47819.19, retorno: 0.615753, prazo_decorrido: 3.27, prazo_estimado: '12-24 meses', ordem_cronologica: '2024' },
+      { cnj_part: '0410229', cedente_part: 'Saverio', status: 'Transferência', credito_atualizado: 100158.86, valor_receber: 97654.88, retorno: 0.740207, prazo_decorrido: 3.27, prazo_estimado: '12-24 meses', ordem_cronologica: '2011' },
+      { cnj_part: '0027207', cedente_part: 'Sonia Maria', status: 'Transferência', credito_atualizado: 26371.06, valor_receber: 15427.07, retorno: 0.441885, prazo_decorrido: 3.27, prazo_estimado: '12-24 meses', ordem_cronologica: '2025' },
+      { cnj_part: '0014169', cedente_part: 'Jose Roberto', status: 'Transferência', credito_atualizado: 243668.82, valor_receber: 138891.23, retorno: 0.753971, prazo_decorrido: 19.87, prazo_estimado: '0-6 meses', ordem_cronologica: '2026' },
+      { cnj_part: '0602624', cedente_part: 'Eunice Reis', status: 'Transferência', credito_atualizado: 459745.97, valor_receber: 262055.20, retorno: 0.421156, prazo_decorrido: 18.2, prazo_estimado: '0-6 meses', ordem_cronologica: '2025' },
+      { cnj_part: '0021843', cedente_part: 'Antonio Sidonio', status: 'Análise Procuradoria', credito_atualizado: 163506.60, valor_receber: 93198.76, retorno: 1.459445, prazo_decorrido: 15.23, prazo_estimado: '12-24 meses', ordem_cronologica: '2008' },
+      { cnj_part: '0021843', cedente_part: 'Francisco Jose', status: 'Análise Procuradoria', credito_atualizado: 327109.43, valor_receber: 186452.38, retorno: 1.459444, prazo_decorrido: 15.23, prazo_estimado: '12-24 meses', ordem_cronologica: '2008' },
+      { cnj_part: '0421581', cedente_part: 'Amelia Etsuko', status: 'Fila de Pagamento', credito_atualizado: 306104.78, valor_receber: 290799.54, retorno: 0.639971, prazo_decorrido: 19.87, prazo_estimado: '6-12 meses', ordem_cronologica: '2010' },
+      { cnj_part: '0417462', cedente_part: 'Elisabeth Andrade', status: 'Fila de Pagamento', credito_atualizado: 259463.10, valor_receber: 246489.94, retorno: 0.726265, prazo_decorrido: 19.23, prazo_estimado: '6-12 meses', ordem_cronologica: '2010' },
+      { cnj_part: '0017892', cedente_part: 'Usina Nossa', status: 'Homologação', credito_atualizado: 4286100, valor_receber: 4071795, retorno: 6.7558, prazo_decorrido: 21.5, prazo_estimado: '+36 meses', ordem_cronologica: 'DC' },
+      { cnj_part: '0007417', cedente_part: 'Elisabeth Regina', status: 'Homologação', credito_atualizado: 477007.55, valor_receber: 279049.41, retorno: 0.720534, prazo_decorrido: 5.93, prazo_estimado: '12-24 meses', ordem_cronologica: '2027' },
+      { cnj_part: '061080002', cedente_part: 'Luiz Carlos Tomaz', status: 'Homologação', credito_atualizado: 1300120.71, valor_receber: 1235114.68, retorno: 0.645369, prazo_decorrido: 4.73, prazo_estimado: '6-12 meses', ordem_cronologica: '2009' },
+      { cnj_part: '1006153', cedente_part: 'Rent Equipo', status: 'Homologação', credito_atualizado: 788057.85, valor_receber: 768356.41, retorno: 1.227187, prazo_decorrido: 3.6, prazo_estimado: '24-36 meses', ordem_cronologica: 'DC' },
+      { cnj_part: '0034343', cedente_part: 'Ludmila', status: 'Homologação', credito_atualizado: 138379.17, valor_receber: 134919.69, retorno: 0.771127, prazo_decorrido: 3.27, prazo_estimado: '6-12 meses', ordem_cronologica: '2023' },
+      { cnj_part: '0032749', cedente_part: 'Leonor Claro', status: 'Homologação', credito_atualizado: 889188.63, valor_receber: 520175.35, retorno: 0.579455, prazo_decorrido: 0.2, prazo_estimado: '12-24 meses', ordem_cronologica: '2028' },
+      { cnj_part: '0416046', cedente_part: 'Maria Aparecida Ribeiro', status: 'Homologação', credito_atualizado: 699335.10, valor_receber: 409111.03, retorno: 0.989527, prazo_decorrido: 0.2, prazo_estimado: '24-36 meses', ordem_cronologica: '2028' },
+    ];
+
+    let updated = 0, notFound = 0;
+    for (const upd of UPDATES) {
+      // Find matching precatorio by CNJ partial + cedente partial
+      const match = precatorios.find(p =>
+        (p.cnj || '').includes(upd.cnj_part) &&
+        (p.cedente || '').toLowerCase().includes(upd.cedente_part.toLowerCase())
+      );
+
+      if (match) {
+        const updateData = {
+          status: upd.status, credito_atualizado: upd.credito_atualizado,
+          valor_receber: upd.valor_receber, retorno: upd.retorno,
+          prazo_decorrido: upd.prazo_decorrido, prazo_estimado: upd.prazo_estimado,
+          ordem_cronologica: upd.ordem_cronologica,
+        };
+        if (upd.tir) updateData.tir = upd.tir;
+        if (upd.data_recebimento) updateData.data_recebimento = upd.data_recebimento;
+
+        const { error } = await supabase.from('precatorios').update(updateData).eq('id', match.id);
+        if (!error) updated++;
+      } else {
+        notFound++;
+        console.log('Not found:', upd.cedente_part, upd.cnj_part);
+      }
+    }
+
+    alert(`Atualização concluída: ${updated} atualizados, ${notFound} não encontrados`);
+    await loadData();
+  }
+
   if (!authChecked) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: 'var(--bg-primary)' }}>
       <div style={{ textAlign: 'center' }}>
@@ -827,7 +889,7 @@ export default function WealthOfficeApp() {
 
       {/* MAIN */}
       <main style={S.main} className="bg-pattern">
-        {tab === 'dashboard' && <DashboardTab precatorios={precatorios} onNavigate={setTab} />}
+        {tab === 'dashboard' && <DashboardTab precatorios={precatorios} onNavigate={setTab} isAdmin={isAdmin} onBatchUpdate={batchUpdateReport24032026} />}
         {tab === 'book' && <BookTab precatorios={precatorios} onDetail={openDetail} onExport={exportCSV} onNavigate={setTab} onDelete={id => setDeleteConfirm(id)} />}
         {tab === 'detalhe' && <DetalheTab precatorio={precatorios.find(p => p.id === selectedId)} onBack={() => setTab('book')} onSave={updatePrecatorio} onDelete={id => setDeleteConfirm(id)} atividades={atividades.filter(a => a.precatorio_id === selectedId)} />}
         {tab === 'buscar' && <BuscarTab precatorios={precatorios} onDetail={openDetail} />}
@@ -858,13 +920,20 @@ export default function WealthOfficeApp() {
 // ============================================================
 // DASHBOARD TAB
 // ============================================================
-function DashboardTab({ precatorios, onNavigate }) {
+function DashboardTab({ precatorios, onNavigate, isAdmin, onBatchUpdate }) {
   const totalDesembolso = precatorios.reduce((s, p) => s + Number(p.desembolso || 0), 0);
   const totalNominal = precatorios.reduce((s, p) => s + Number(p.valor_nominal || 0), 0);
   const totalReceber = precatorios.reduce((s, p) => s + Number(p.valor_receber || 0), 0);
   const totalLucro = totalReceber - totalDesembolso;
-  const avgRetorno = precatorios.length > 0 ? precatorios.reduce((s, p) => s + Number(p.retorno || 0), 0) / precatorios.length : 0;
-  const avgTIR = precatorios.length > 0 ? precatorios.reduce((s, p) => s + Number(p.tir || 0), 0) / precatorios.length : 0;
+  // Weighted average return (by desembolso)
+  const avgRetorno = totalDesembolso > 0
+    ? precatorios.reduce((s, p) => s + Number(p.retorno || 0) * Number(p.desembolso || 0), 0) / totalDesembolso
+    : 0;
+  // TIR only for received precatórios (TIR > 0)
+  const tirPrecatorios = precatorios.filter(p => Number(p.tir || 0) > 0);
+  const avgTIR = tirPrecatorios.length > 0
+    ? tirPrecatorios.reduce((s, p) => s + Number(p.tir || 0) * Number(p.desembolso || 0), 0) / tirPrecatorios.reduce((s, p) => s + Number(p.desembolso || 0), 0)
+    : 0;
 
   const statusData = STATUS_LIST.map(st => ({ label: st, value: precatorios.filter(p => p.status === st).length, color: STATUS_COLORS[st] }));
   const esferaData = ESFERAS.map(e => ({ label: e, count: precatorios.filter(p => p.esfera === e).length, total: precatorios.filter(p => p.esfera === e).reduce((s, p) => s + Number(p.desembolso || 0), 0) }));
@@ -891,10 +960,17 @@ function DashboardTab({ precatorios, onNavigate }) {
             <div style={{ ...S.pageTitle, fontSize: 32 }}>Dashboard</div>
             <div style={S.pageSub}>{today}</div>
           </div>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Book ativo</div>
-            <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--accent)', fontFamily: 'var(--font-serif)', letterSpacing: '-0.02em' }}>{precatorios.length}</div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>precatórios</div>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
+            {isAdmin && onBatchUpdate && (
+              <button style={{ ...S.btn('default'), fontSize: 11, padding: '8px 14px' }} onClick={onBatchUpdate}>
+                Atualizar Relatório 24/03
+              </button>
+            )}
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Book ativo</div>
+              <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--accent)', fontFamily: 'var(--font-serif)', letterSpacing: '-0.02em' }}>{precatorios.length}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>precatórios</div>
+            </div>
           </div>
         </div>
       </div>
