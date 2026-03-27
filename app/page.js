@@ -33,6 +33,20 @@ const PRAZO_COLORS = {
   '+36 meses': '#A78BFA',
 };
 
+// Pipeline de precatórios — 6 etapas do ciclo de vida
+const PIPELINE = [
+  { key: 'Homologação', step: 1, label: 'Homologação', short: 'Homolog.', desc: 'Cessão sendo homologada pelo tribunal', color: '#60A5FA' },
+  { key: 'Análise Procuradoria', step: 2, label: 'Procuradoria', short: 'Procur.', desc: 'Acordo em análise pela Procuradoria', color: '#FBBF24' },
+  { key: 'Fila de Pagamento', step: 3, label: 'Fila Pagamento', short: 'Fila', desc: 'Aguardando orçamento (LOA) e ordem de pagamento', color: '#F97316' },
+  { key: 'Depósito', step: 4, label: 'Depósito', short: 'Depósito', desc: 'Valor depositado judicialmente pelo devedor', color: '#A78BFA' },
+  { key: 'Transferência', step: 5, label: 'Transferência', short: 'Transf.', desc: 'Alvará emitido, transferindo para conta do investidor', color: '#34D399' },
+  { key: 'Recebido', step: 6, label: 'Recebido', short: 'Recebido', desc: 'Crédito liquidado e recebido pelo investidor', color: '#34D399' },
+];
+function getPipelineStep(status) {
+  const found = PIPELINE.find(p => p.key === status);
+  return found ? found.step : 1;
+}
+
 // ============================================================
 // HELPERS
 // ============================================================
@@ -490,6 +504,77 @@ function BarChart({ data, height = 200 }) {
           <div style={{ fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{d.label}</div>
         </div>
       ))}
+    </div>
+  );
+}
+
+// ============================================================
+// PIPELINE BAR — visual progress tracker
+// ============================================================
+function PipelineBar({ status, compact = false }) {
+  const currentStep = getPipelineStep(status);
+
+  if (compact) {
+    // Inline compact version for table/cards
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+        {PIPELINE.map((p, i) => {
+          const done = p.step < currentStep;
+          const active = p.step === currentStep;
+          return (
+            <React.Fragment key={p.key}>
+              <div title={p.label} style={{
+                width: active ? 20 : 14, height: active ? 8 : 6, borderRadius: 4,
+                background: done ? 'var(--green)' : active ? p.color : 'var(--bg-elevated)',
+                transition: 'all 0.3s', opacity: done || active ? 1 : 0.3,
+              }} />
+            </React.Fragment>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // Full version for detail/cards
+  return (
+    <div style={{ padding: '4px 0' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', position: 'relative' }}>
+        {/* Connecting line */}
+        <div style={{ position: 'absolute', top: 14, left: 14, right: 14, height: 2, background: 'var(--bg-elevated)', zIndex: 0 }} />
+        <div style={{ position: 'absolute', top: 14, left: 14, height: 2, background: 'var(--green)', zIndex: 1, width: `${Math.max(0, ((currentStep - 1) / (PIPELINE.length - 1)) * 100)}%`, transition: 'width 0.5s ease' }} />
+
+        {PIPELINE.map((p, i) => {
+          const done = p.step < currentStep;
+          const active = p.step === currentStep;
+          const future = p.step > currentStep;
+          return (
+            <div key={p.key} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative', zIndex: 2 }}>
+              {/* Circle */}
+              <div style={{
+                width: active ? 28 : 24, height: active ? 28 : 24, borderRadius: '50%',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: done ? 'var(--green)' : active ? p.color : 'var(--bg-elevated)',
+                border: active ? `2px solid ${p.color}` : done ? '2px solid var(--green)' : '2px solid var(--border)',
+                color: done || active ? '#fff' : 'var(--text-muted)',
+                fontSize: done ? 12 : 10, fontWeight: 700,
+                transition: 'all 0.3s',
+                boxShadow: active ? `0 0 12px ${p.color}40` : 'none',
+              }}>
+                {done ? '✓' : p.step}
+              </div>
+              {/* Label */}
+              <div style={{
+                fontSize: 9.5, fontWeight: active ? 700 : 500, marginTop: 8,
+                color: done ? 'var(--green)' : active ? p.color : 'var(--text-muted)',
+                textAlign: 'center', lineHeight: 1.3, letterSpacing: '-0.01em',
+                transition: 'all 0.3s',
+              }}>
+                {p.short}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -1232,7 +1317,12 @@ function BookTab({ precatorios, onDetail, onExport, onNavigate, onDelete }) {
                     {p.tribunal && <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 2 }}>{p.tribunal}</div>}
                   </td>
                   <td style={S.td}><span style={S.badge(p.esfera === 'Estadual' ? 'var(--blue)' : p.esfera === 'Federal' ? 'var(--green)' : 'var(--accent)')}>{p.esfera}</span></td>
-                  <td style={S.td}><span style={S.badge(STATUS_COLORS[p.status] || 'var(--text-muted)')}>{p.status}</span></td>
+                  <td style={S.td}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <PipelineBar status={p.status} compact />
+                      <span style={{ fontSize: 10, color: STATUS_COLORS[p.status] || 'var(--text-muted)', fontWeight: 600 }}>{p.status}</span>
+                    </div>
+                  </td>
                   <td style={S.td}><span style={S.badge(PRAZO_COLORS[p.prazo_estimado] || 'var(--text-muted)')}>{p.prazo_estimado}</span></td>
                   <td style={{ ...S.td, fontWeight: 500, fontVariantNumeric: 'tabular-nums', fontSize: 13 }}>{fmtBRL(p.desembolso)}</td>
                   <td style={{ ...S.td, fontWeight: 600, fontVariantNumeric: 'tabular-nums', fontSize: 13, color: 'var(--accent-light)' }}>{fmtBRL(p.valor_receber)}</td>
@@ -1423,14 +1513,18 @@ function DetalheTab({ precatorio, onBack, onSave, onDelete, atividades }) {
 
         {/* Right: Timeline + Info */}
         <div>
-          {/* Status card */}
+          {/* Pipeline progress */}
           <div style={{ ...S.card, background: 'linear-gradient(135deg, var(--bg-card) 0%, var(--bg-surface) 100%)' }}>
-            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, fontFamily: 'var(--font-serif)' }}>Status Atual</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-              <div style={{ width: 10, height: 10, borderRadius: '50%', background: STATUS_COLORS[form.status] || 'var(--text-muted)' }} />
-              <span style={{ fontSize: 16, fontWeight: 700, color: STATUS_COLORS[form.status] }}>{form.status}</span>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, fontFamily: 'var(--font-serif)' }}>Pipeline</div>
+              <span style={{ fontSize: 11, color: STATUS_COLORS[form.status], fontWeight: 600 }}>Etapa {getPipelineStep(form.status)} de 6</span>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <PipelineBar status={form.status} />
+            <div style={{ marginTop: 16, padding: '12px', background: 'var(--bg-elevated)', borderRadius: 10 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: STATUS_COLORS[form.status], marginBottom: 4 }}>{form.status}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>{PIPELINE.find(p => p.key === form.status)?.desc || ''}</div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 14 }}>
               <div style={{ padding: '12px', background: 'var(--bg-elevated)', borderRadius: 10 }}>
                 <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Prazo</div>
                 <div style={{ fontSize: 13, fontWeight: 600, color: PRAZO_COLORS[form.prazo_estimado] }}>{form.prazo_estimado}</div>
@@ -1717,10 +1811,14 @@ function AcompanhamentoTab({ precatorios, onDetail }) {
                     <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>{p.cedente}</div>
                     <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>vs {p.devedor} — {p.esfera}</div>
                   </div>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <span style={S.badge(STATUS_COLORS[p.status] || 'var(--text-muted)')}>{p.status}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <span style={S.badge(PRAZO_COLORS[p.prazo_estimado] || 'var(--text-muted)')}>{p.prazo_estimado}</span>
                   </div>
+                </div>
+
+                {/* Pipeline */}
+                <div style={{ marginBottom: 14 }}>
+                  <PipelineBar status={p.status} compact />
                 </div>
 
                 {/* CNJ + Financial */}
