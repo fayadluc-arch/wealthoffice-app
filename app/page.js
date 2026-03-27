@@ -96,7 +96,7 @@ const S = {
   app: { display: 'flex', minHeight: '100vh' },
   sidebar: { width: 260, background: 'var(--bg-secondary)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 100, backdropFilter: 'blur(20px)' },
   sidebarLogo: { padding: '28px 24px 24px', borderBottom: '1px solid var(--border)' },
-  logoText: { fontSize: 24, fontWeight: 800, background: 'linear-gradient(135deg, #C9975B 0%, #E8C47C 50%, #C9975B 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', letterSpacing: '-0.02em' },
+  logoText: { fontSize: 24, fontWeight: 800, background: 'linear-gradient(135deg, #2E9E6E 0%, #3CC486 50%, #2E9E6E 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', letterSpacing: '-0.02em' },
   logoSub: { fontSize: 10, color: 'var(--text-muted)', marginTop: 4, letterSpacing: '2px', textTransform: 'uppercase', fontWeight: 500 },
   nav: { flex: 1, padding: '16px 12px' },
   navItem: (active) => ({ display: 'flex', alignItems: 'center', gap: 14, padding: '11px 16px', borderRadius: 'var(--radius-md)', cursor: 'pointer', color: active ? 'var(--gold)' : 'var(--text-secondary)', background: active ? 'var(--gold-dim)' : 'transparent', fontSize: 13.5, fontWeight: active ? 600 : 400, transition: 'all var(--transition)', border: 'none', width: '100%', textAlign: 'left', letterSpacing: '-0.01em', marginBottom: 2 }),
@@ -113,7 +113,7 @@ const S = {
   kpiSub: { fontSize: 11.5, color: 'var(--text-muted)', marginTop: 6, letterSpacing: '-0.01em' },
   btn: (variant) => ({
     display: 'inline-flex', alignItems: 'center', gap: 8, padding: '9px 18px', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontSize: 13, fontWeight: 600, border: 'none', transition: 'all var(--transition)', letterSpacing: '-0.01em',
-    ...(variant === 'primary' ? { background: 'linear-gradient(135deg, var(--gold) 0%, var(--gold-light) 100%)', color: '#0A0C10', boxShadow: '0 2px 8px rgba(201,151,91,0.25)' } :
+    ...(variant === 'primary' ? { background: 'linear-gradient(135deg, var(--accent) 0%, var(--accent-light) 100%)', color: '#fff', boxShadow: '0 2px 8px rgba(201,151,91,0.25)' } :
        variant === 'danger' ? { background: 'var(--red-dim)', color: 'var(--red)', border: '1px solid rgba(248,113,113,0.2)' } :
        { background: 'var(--bg-elevated)', color: 'var(--text-primary)', border: '1px solid var(--border-light)' })
   }),
@@ -201,7 +201,7 @@ function AuthScreen({ onAuth }) {
 
         <h1 style={{ fontSize: 42, fontWeight: 700, lineHeight: 1.15, letterSpacing: '-0.03em', marginBottom: 20 }}>
           Seu escritório digital para{' '}
-          <span style={{ background: 'linear-gradient(135deg, var(--gold), var(--gold-light))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+          <span style={{ background: 'linear-gradient(135deg, var(--accent), var(--accent-light))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
             ativos alternativos.
           </span>
         </h1>

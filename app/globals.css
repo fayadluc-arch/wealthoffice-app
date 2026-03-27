@@ -1,20 +1,20 @@
 :root {
-  --bg-primary: #0A0C10;
-  --bg-secondary: #12151C;
-  --bg-card: #161A24;
-  --bg-card-hover: #1C2030;
-  --bg-elevated: #1E2230;
-  --bg-hover: #222838;
-  --border: #1F2535;
-  --border-light: #2A3045;
-  --text-primary: #F4F4F5;
-  --text-secondary: #A1A7B5;
-  --text-muted: #636B7E;
-  --gold: #C9975B;
-  --gold-light: #E8C47C;
-  --gold-hover: #D4A76A;
-  --gold-dim: rgba(201, 151, 91, 0.08);
-  --gold-glow: rgba(201, 151, 91, 0.15);
+  --bg-primary: #0B0E11;
+  --bg-secondary: #101418;
+  --bg-card: #141920;
+  --bg-card-hover: #1A2028;
+  --bg-elevated: #1C2230;
+  --bg-hover: #202838;
+  --border: #1C2430;
+  --border-light: #283040;
+  --text-primary: #E8ECF0;
+  --text-secondary: #8A95A5;
+  --text-muted: #556070;
+  --accent: #2E9E6E;
+  --accent-light: #3CC486;
+  --accent-hover: #38B87C;
+  --accent-dim: rgba(46, 158, 110, 0.08);
+  --accent-glow: rgba(46, 158, 110, 0.15);
   --green: #34D399;
   --green-dim: rgba(52, 211, 153, 0.1);
   --red: #F87171;
@@ -23,6 +23,12 @@
   --blue-dim: rgba(96, 165, 250, 0.1);
   --orange: #FBBF24;
   --purple: #A78BFA;
+  /* Legacy aliases */
+  --gold: var(--accent);
+  --gold-light: var(--accent-light);
+  --gold-hover: var(--accent-hover);
+  --gold-dim: var(--accent-dim);
+  --gold-glow: var(--accent-glow);
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 16px;
@@ -30,7 +36,7 @@
   --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
   --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
   --shadow-lg: 0 8px 32px rgba(0,0,0,0.5);
-  --shadow-glow: 0 0 40px rgba(201, 151, 91, 0.08);
+  --shadow-glow: 0 0 40px rgba(46, 158, 110, 0.08);
   --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -93,8 +99,8 @@ input:focus, select:focus, textarea:focus {
   100% { background-position: 200% 0; }
 }
 @keyframes glow {
-  0%, 100% { box-shadow: 0 0 20px rgba(201, 151, 91, 0.1); }
-  50% { box-shadow: 0 0 40px rgba(201, 151, 91, 0.2); }
+  0%, 100% { box-shadow: 0 0 20px rgba(46, 158, 110, 0.1); }
+  50% { box-shadow: 0 0 40px rgba(46, 158, 110, 0.2); }
 }
 
 .fade-in { animation: fadeIn 0.4s ease-out forwards; }
@@ -132,7 +138,7 @@ input:focus, select:focus, textarea:focus {
 /* Button hover */
 .btn-gold:hover {
   background: var(--gold-hover) !important;
-  box-shadow: 0 4px 16px rgba(201, 151, 91, 0.3);
+  box-shadow: 0 4px 16px rgba(46, 158, 110, 0.3);
 }
 
 /* Number font */
