@@ -66,7 +66,7 @@ O campo confianca: "alta" se encontrou anúncios nessa rua, "média" se usou rua
           tools: [{ google_search: {} }],
           generationConfig: {
             temperature: 0.1,
-            maxOutputTokens: 2048,
+            maxOutputTokens: 4096,
           },
         }),
       }
