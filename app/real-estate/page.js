@@ -97,6 +97,12 @@ const Icons = {
   dollar: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>,
   home: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
   map: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>,
+  contract: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M9 12h6M9 16h6"/></svg>,
+  debt: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><path d="M1 10h22"/><path d="M6 16h4M14 16h4"/></svg>,
+  shield: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>,
+  capex: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>,
+  pipeline: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>,
+  report: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>,
 };
 
 // ============================================================
@@ -1487,6 +1493,960 @@ Compare: 1) IRPF sobre aluguéis (tabela progressiva), 2) Lucro Presumido PJ (32
 }
 
 // ============================================================
+// TAB 8: LEASE MANAGEMENT (Contratos)
+// ============================================================
+function LeaseManagementTab({ imoveis }) {
+  const [subtab, setSubtab] = useState('vencimentos');
+
+  const alugados = useMemo(() => imoveis.filter(i => i.status === 'Alugado' || i.contrato_fim), [imoveis]);
+  const sorted = useMemo(() => [...alugados].sort((a, b) => {
+    if (!a.contrato_fim) return 1;
+    if (!b.contrato_fim) return -1;
+    return new Date(a.contrato_fim) - new Date(b.contrato_fim);
+  }), [alugados]);
+
+  function contratoCor(im) {
+    const d = diasFimContrato(im);
+    if (d === null) return 'var(--text-muted)';
+    if (d <= 0) return '#F87171';
+    if (d <= 90) return '#F87171';
+    if (d <= 180) return '#FBBF24';
+    return '#34D399';
+  }
+  function contratoLabel(im) {
+    const d = diasFimContrato(im);
+    if (d === null) return 'Sem contrato';
+    if (d <= 0) return `Vencido há ${Math.abs(d)}d`;
+    return `${d}d restantes`;
+  }
+  function tenantGrade(im) {
+    if (im.inadimplente) return { grade: 'C', color: '#F87171' };
+    if (!im.inquilino) return { grade: '—', color: 'var(--text-muted)' };
+    return { grade: 'A', color: '#34D399' };
+  }
+
+  return (
+    <div>
+      <div style={S.subtabs}>
+        {['vencimentos', 'clausulas', 'tenant'].map(t => (
+          <button key={t} style={S.subtab(subtab === t)} onClick={() => setSubtab(t)}>
+            {{ vencimentos: 'Quadro de Vencimentos', clausulas: 'Cláusulas', tenant: 'Tenant Quality' }[t]}
+          </button>
+        ))}
+      </div>
+
+      {subtab === 'vencimentos' && (
+        <div style={S.card}>
+          <div style={S.formSection}>Quadro de Vencimentos de Contratos</div>
+          {sorted.length === 0 ? (
+            <div style={S.emptyState}>Nenhum imóvel com contrato de locação cadastrado.</div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={S.table}>
+                <thead><tr>
+                  <th style={S.th}>Imóvel</th><th style={S.th}>Inquilino</th><th style={S.th}>Aluguel</th>
+                  <th style={S.th}>Início</th><th style={S.th}>Fim</th><th style={S.th}>Countdown</th>
+                  <th style={S.th}>Índice</th><th style={S.th}>Próx. Reajuste</th>
+                </tr></thead>
+                <tbody>
+                  {sorted.map(im => {
+                    const d = diasFimContrato(im);
+                    const total = im.contrato_inicio && im.contrato_fim ? Math.max(1, Math.round((new Date(im.contrato_fim) - new Date(im.contrato_inicio)) / (86400000))) : 100;
+                    const elapsed = im.contrato_inicio ? Math.max(0, Math.round((new Date() - new Date(im.contrato_inicio)) / 86400000)) : 0;
+                    const pct = Math.min(100, Math.max(0, (elapsed / total) * 100));
+                    return (
+                      <tr key={im.id}>
+                        <td style={S.td}>{im.nome || im.logradouro || '—'}</td>
+                        <td style={S.td}>{im.inquilino || '—'}</td>
+                        <td style={S.td}>{fmtR(im.aluguel)}</td>
+                        <td style={S.td}>{fmtDate(im.contrato_inicio)}</td>
+                        <td style={S.td}>{fmtDate(im.contrato_fim)}</td>
+                        <td style={S.td}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <div style={{ width: 80, height: 6, borderRadius: 3, background: 'var(--bg-surface)', overflow: 'hidden' }}>
+                              <div style={{ width: pct + '%', height: '100%', borderRadius: 3, background: contratoCor(im) }} />
+                            </div>
+                            <span style={{ ...S.badge(contratoCor(im)), fontSize: 10, padding: '3px 10px' }}>{contratoLabel(im)}</span>
+                          </div>
+                        </td>
+                        <td style={S.td}>{im.indice_reajuste || '—'}</td>
+                        <td style={S.td}>{fmtDate(im.data_proximo_reajuste)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {subtab === 'clausulas' && (
+        <div>
+          {alugados.length === 0 ? (
+            <div style={S.emptyState}>Nenhum contrato cadastrado.</div>
+          ) : alugados.map(im => (
+            <div key={im.id} style={{ ...S.card, marginBottom: 16 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 16, color: 'var(--text-primary)' }}>{im.nome || im.logradouro || 'Imóvel'}</div>
+              <div style={S.grid3}>
+                <div>
+                  <div style={S.kpiLabel}>Multa Rescisória</div>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: '#F87171' }}>{fmtR((im.aluguel || 0) * 3)}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>3x aluguel (padrão)</div>
+                </div>
+                <div>
+                  <div style={S.kpiLabel}>Carência</div>
+                  <div style={{ fontSize: 18, fontWeight: 700 }}>—</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Não informado</div>
+                </div>
+                <div>
+                  <div style={S.kpiLabel}>Índice de Reajuste</div>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: '#60A5FA' }}>{im.indice_reajuste || 'IGPM'}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Próx: {fmtDate(im.data_proximo_reajuste)}</div>
+                </div>
+              </div>
+              <div style={{ marginTop: 16, display: 'flex', gap: 12 }}>
+                <div style={S.badge('#34D399')}>Garantia: {im.garantia || 'Não informada'}</div>
+                <div style={S.badge('#60A5FA')}>Vigência: {fmtDate(im.contrato_inicio)} a {fmtDate(im.contrato_fim)}</div>
+                {im.imobiliaria && <div style={S.badge('#A78BFA')}>Imobiliária: {im.imobiliaria}</div>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {subtab === 'tenant' && (
+        <div style={S.card}>
+          <div style={S.formSection}>Qualidade dos Inquilinos</div>
+          {alugados.length === 0 ? (
+            <div style={S.emptyState}>Nenhum inquilino cadastrado.</div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={S.table}>
+                <thead><tr>
+                  <th style={S.th}>Imóvel</th><th style={S.th}>Inquilino</th><th style={S.th}>Contato</th>
+                  <th style={S.th}>Garantia</th><th style={S.th}>Inadimplente</th><th style={S.th}>Rating</th>
+                </tr></thead>
+                <tbody>
+                  {alugados.map(im => {
+                    const { grade, color } = tenantGrade(im);
+                    return (
+                      <tr key={im.id}>
+                        <td style={S.td}>{im.nome || im.logradouro || '—'}</td>
+                        <td style={S.td}>{im.inquilino || '—'}</td>
+                        <td style={S.td}>{im.inquilino_contato || '—'}</td>
+                        <td style={S.td}><span style={S.badge('#60A5FA')}>{im.garantia || 'N/A'}</span></td>
+                        <td style={S.td}>{im.inadimplente ? <span style={S.badge('#F87171')}>Sim</span> : <span style={S.badge('#34D399')}>Não</span>}</td>
+                        <td style={S.td}><span style={{ fontSize: 20, fontWeight: 800, color }}>{grade}</span></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// TAB 9: DEBT SCHEDULE (Dívida)
+// ============================================================
+function DebtScheduleTab({ imoveis, dividas }) {
+  const [subtab, setSubtab] = useState('cronograma');
+  const [selicScenario, setSelicScenario] = useState(15);
+
+  const allDividas = useMemo(() => {
+    if (dividas && dividas.length > 0) return dividas;
+    return imoveis.filter(i => (i.divida || 0) > 0).map(i => ({
+      id: i.id, imovel_id: i.id, imovel_nome: i.nome || i.logradouro,
+      banco: '—', saldo_devedor: i.divida || 0, taxa: 0, parcela: i.parcela_mensal || 0,
+      parcelas_restantes: 0, tipo_taxa: 'fixo', data_vencimento: null,
+    }));
+  }, [imoveis, dividas]);
+
+  const sorted = useMemo(() => [...allDividas].sort((a, b) => {
+    if (!a.data_vencimento) return 1;
+    if (!b.data_vencimento) return -1;
+    return new Date(a.data_vencimento) - new Date(b.data_vencimento);
+  }), [allDividas]);
+
+  const resumo = useMemo(() => {
+    const totalDivida = allDividas.reduce((s, d) => s + (d.saldo_devedor || 0), 0);
+    const totalParcela = allDividas.reduce((s, d) => s + (d.parcela || 0), 0);
+    const patrimonioTotal = imoveis.reduce((s, i) => s + (i.valor_mercado || i.custo_aquisicao || 0), 0);
+    const ltvMedio = patrimonioTotal > 0 ? (totalDivida / patrimonioTotal) * 100 : 0;
+    const noiAnual = imoveis.reduce((s, i) => s + calcNOI(i), 0);
+    const dcrMedio = totalParcela > 0 ? (noiAnual / 12) / totalParcela : 0;
+    const taxas = allDividas.filter(d => d.taxa > 0);
+    const wtAvgTaxa = taxas.length > 0 ? taxas.reduce((s, d) => s + d.taxa * d.saldo_devedor, 0) / taxas.reduce((s, d) => s + d.saldo_devedor, 0) : 0;
+    return { totalDivida, totalParcela, ltvMedio, dcrMedio, wtAvgTaxa };
+  }, [allDividas, imoveis]);
+
+  return (
+    <div>
+      <div style={S.subtabs}>
+        {['cronograma', 'stress', 'resumo'].map(t => (
+          <button key={t} style={S.subtab(subtab === t)} onClick={() => setSubtab(t)}>
+            {{ cronograma: 'Cronograma', stress: 'Stress Test', resumo: 'Resumo' }[t]}
+          </button>
+        ))}
+      </div>
+
+      {subtab === 'cronograma' && (
+        <div style={S.card}>
+          <div style={S.formSection}>Cronograma de Dívidas</div>
+          {sorted.length === 0 ? (
+            <div style={S.emptyState}>Nenhuma dívida cadastrada.</div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={S.table}>
+                <thead><tr>
+                  <th style={S.th}>Imóvel</th><th style={S.th}>Banco</th><th style={S.th}>Saldo Devedor</th>
+                  <th style={S.th}>Taxa a.a.</th><th style={S.th}>Parcela</th><th style={S.th}>Parcelas Rest.</th>
+                  <th style={S.th}>Tipo Taxa</th><th style={S.th}>Vencimento</th>
+                </tr></thead>
+                <tbody>
+                  {sorted.map(d => {
+                    const imName = d.imovel_nome || imoveis.find(i => i.id === d.imovel_id)?.nome || imoveis.find(i => i.id === d.imovel_id)?.logradouro || '—';
+                    return (
+                      <tr key={d.id}>
+                        <td style={S.td}>{imName}</td>
+                        <td style={S.td}>{d.banco || '—'}</td>
+                        <td style={S.td}>{fmtR(d.saldo_devedor)}</td>
+                        <td style={S.td}>{d.taxa ? fmtPct(d.taxa) : '—'}</td>
+                        <td style={S.td}>{fmtR(d.parcela)}</td>
+                        <td style={S.td}>{d.parcelas_restantes || '—'}</td>
+                        <td style={S.td}><span style={S.badge(d.tipo_taxa === 'variavel' ? '#FBBF24' : '#34D399')}>{d.tipo_taxa === 'variavel' ? 'Variável' : 'Fixo'}</span></td>
+                        <td style={S.td}>{fmtDate(d.data_vencimento)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {subtab === 'stress' && (
+        <div style={S.card}>
+          <div style={S.formSection}>Stress Test — Cenário de Selic</div>
+          <div style={{ display: 'flex', gap: 12, marginBottom: 24, alignItems: 'center' }}>
+            <label style={{ ...S.label, marginBottom: 0 }}>Selic Cenário (%)</label>
+            {[12, 15, 18].map(v => (
+              <button key={v} style={S.btn(selicScenario === v ? 'primary' : '')} onClick={() => setSelicScenario(v)}>{v}%</button>
+            ))}
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={S.table}>
+              <thead><tr>
+                <th style={S.th}>Imóvel</th><th style={S.th}>Tipo Taxa</th><th style={S.th}>Parcela Atual</th>
+                <th style={S.th}>Parcela Cenário</th><th style={S.th}>Variação</th><th style={S.th}>DCR Cenário</th>
+              </tr></thead>
+              <tbody>
+                {allDividas.map(d => {
+                  const imName = d.imovel_nome || imoveis.find(i => i.id === d.imovel_id)?.nome || '—';
+                  const im = imoveis.find(i => i.id === d.imovel_id);
+                  const isVar = d.tipo_taxa === 'variavel';
+                  const spreadEstimate = d.taxa > 0 ? d.taxa - 13.25 : 2;
+                  const newRate = isVar ? selicScenario + Math.max(0, spreadEstimate) : d.taxa;
+                  const rateRatio = d.taxa > 0 ? newRate / d.taxa : 1;
+                  const parcelaCenario = isVar ? (d.parcela || 0) * rateRatio : d.parcela;
+                  const variacao = d.parcela > 0 ? ((parcelaCenario - d.parcela) / d.parcela) * 100 : 0;
+                  const noiMensal = im ? calcNOI(im) / 12 : 0;
+                  const dcrCenario = parcelaCenario > 0 ? noiMensal / parcelaCenario : 0;
+                  return (
+                    <tr key={d.id}>
+                      <td style={S.td}>{imName}</td>
+                      <td style={S.td}><span style={S.badge(isVar ? '#FBBF24' : '#34D399')}>{isVar ? 'Variável' : 'Fixo'}</span></td>
+                      <td style={S.td}>{fmtR(d.parcela)}</td>
+                      <td style={S.td}>{fmtR(parcelaCenario)}</td>
+                      <td style={S.td}><span style={{ color: variacao > 0 ? '#F87171' : '#34D399', fontWeight: 600 }}>{variacao > 0 ? '+' : ''}{fmtPct(variacao)}</span></td>
+                      <td style={S.td}><span style={{ color: dcrCenario < 1.2 ? '#F87171' : '#34D399', fontWeight: 700 }}>{dcrCenario.toFixed(2)}x</span></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {subtab === 'resumo' && (
+        <div>
+          <div style={S.kpiGrid}>
+            <div style={S.kpiCard(true)}>
+              <div style={S.kpiLabel}>{Icons.dollar} Dívida Total</div>
+              <div style={S.kpiValue('#F87171')}>{fmtR(resumo.totalDivida)}</div>
+            </div>
+            <div style={S.kpiCard()}>
+              <div style={S.kpiLabel}>Parcela Total Mensal</div>
+              <div style={S.kpiValue('#FBBF24')}>{fmtR(resumo.totalParcela)}</div>
+            </div>
+            <div style={S.kpiCard()}>
+              <div style={S.kpiLabel}>LTV Médio</div>
+              <div style={S.kpiValue(resumo.ltvMedio > 70 ? '#F87171' : '#34D399')}>{fmtPct(resumo.ltvMedio)}</div>
+            </div>
+            <div style={S.kpiCard()}>
+              <div style={S.kpiLabel}>DCR Médio</div>
+              <div style={S.kpiValue(resumo.dcrMedio < 1.2 ? '#F87171' : '#34D399')}>{resumo.dcrMedio.toFixed(2)}x</div>
+            </div>
+            <div style={S.kpiCard()}>
+              <div style={S.kpiLabel}>Taxa Média Ponderada</div>
+              <div style={S.kpiValue('#60A5FA')}>{fmtPct(resumo.wtAvgTaxa)}</div>
+            </div>
+          </div>
+          <div style={S.card}>
+            <div style={S.formSection}>Distribuição por Tipo de Taxa</div>
+            <div style={{ display: 'flex', gap: 24 }}>
+              <div style={{ flex: 1, textAlign: 'center', padding: 20, background: 'var(--bg-surface)', borderRadius: 12 }}>
+                <div style={{ fontSize: 32, fontWeight: 800, color: '#34D399' }}>{allDividas.filter(d => d.tipo_taxa !== 'variavel').length}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Taxa Fixa</div>
+              </div>
+              <div style={{ flex: 1, textAlign: 'center', padding: 20, background: 'var(--bg-surface)', borderRadius: 12 }}>
+                <div style={{ fontSize: 32, fontWeight: 800, color: '#FBBF24' }}>{allDividas.filter(d => d.tipo_taxa === 'variavel').length}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Taxa Variável</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// TAB 10: DD TRACKER
+// ============================================================
+const DD_DEFAULT_ITEMS = [
+  'Matrícula Atualizada', 'CND Federal', 'CND Estadual', 'CND Municipal',
+  'Habite-se', 'IPTU Quitado', 'Laudo de Avaliação', 'Seguro Incêndio',
+  'Contrato de Locação', 'Alvará',
+];
+const DD_STATUS_COLORS = { Pendente: '#FBBF24', Aprovado: '#34D399', Vencido: '#F87171', 'N/A': '#6B7280' };
+
+function DDTrackerTab({ imoveis, ddItems, onSaveDD, onUpdateDD }) {
+  const [selectedId, setSelectedId] = useState('');
+  const [newItem, setNewItem] = useState('');
+
+  const imDDItems = useMemo(() => {
+    if (!selectedId) return [];
+    return ddItems.filter(d => d.imovel_id === selectedId);
+  }, [selectedId, ddItems]);
+
+  const allProgress = useMemo(() => {
+    return imoveis.map(im => {
+      const items = ddItems.filter(d => d.imovel_id === im.id);
+      const total = items.length || 1;
+      const done = items.filter(d => d.status === 'Aprovado' || d.status === 'N/A').length;
+      return { id: im.id, nome: im.nome || im.logradouro || 'Imóvel', total: items.length, done, pct: items.length > 0 ? (done / total) * 100 : 0 };
+    });
+  }, [imoveis, ddItems]);
+
+  async function initDD(imovelId) {
+    const existing = ddItems.filter(d => d.imovel_id === imovelId);
+    if (existing.length > 0) return;
+    const im = imoveis.find(i => i.id === imovelId);
+    const items = DD_DEFAULT_ITEMS.filter(item => item !== 'Alvará' || (im && im.uso !== 'Residencial'));
+    for (const item of items) {
+      await onSaveDD({ imovel_id: imovelId, item_nome: item, status: 'Pendente', observacao: '' });
+    }
+  }
+
+  async function handleStatusChange(ddId, newStatus) {
+    await onUpdateDD(ddId, { status: newStatus });
+  }
+
+  async function addCustomItem() {
+    if (!newItem.trim() || !selectedId) return;
+    await onSaveDD({ imovel_id: selectedId, item_nome: newItem.trim(), status: 'Pendente', observacao: '' });
+    setNewItem('');
+  }
+
+  return (
+    <div>
+      <div style={S.card}>
+        <div style={S.formSection}>Due Diligence — Progresso por Ativo</div>
+        {imoveis.length === 0 ? (
+          <div style={S.emptyState}>Cadastre imóveis para iniciar o DD Tracker.</div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16, marginBottom: 24 }}>
+            {allProgress.map(p => (
+              <div key={p.id} style={{ background: 'var(--bg-surface)', borderRadius: 12, padding: 16, cursor: 'pointer', border: selectedId === p.id ? '2px solid var(--blue)' : '1px solid var(--border)' }} onClick={() => { setSelectedId(p.id); initDD(p.id); }}>
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: 'var(--text-primary)' }}>{p.nome}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ flex: 1, height: 8, borderRadius: 4, background: 'var(--bg-elevated)', overflow: 'hidden' }}>
+                    <div style={{ width: p.pct + '%', height: '100%', borderRadius: 4, background: p.pct >= 100 ? '#34D399' : p.pct >= 50 ? '#FBBF24' : '#F87171', transition: 'width 0.3s' }} />
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: p.pct >= 100 ? '#34D399' : 'var(--text-muted)' }}>{Math.round(p.pct)}%</span>
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>{p.done}/{p.total} itens</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {selectedId && (
+        <div style={S.card}>
+          <div style={S.formSection}>Checklist — {imoveis.find(i => i.id === selectedId)?.nome || 'Imóvel'}</div>
+          {imDDItems.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>Inicializando checklist...</div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={S.table}>
+                <thead><tr>
+                  <th style={S.th}>Item</th><th style={S.th}>Status</th><th style={S.th}>Ações</th>
+                </tr></thead>
+                <tbody>
+                  {imDDItems.map(dd => (
+                    <tr key={dd.id}>
+                      <td style={S.td}>{dd.item_nome}</td>
+                      <td style={S.td}><span style={S.badge(DD_STATUS_COLORS[dd.status] || '#6B7280')}>{dd.status}</span></td>
+                      <td style={S.td}>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          {Object.keys(DD_STATUS_COLORS).map(st => (
+                            <button key={st} style={{ ...S.btn(dd.status === st ? 'primary' : ''), padding: '4px 10px', fontSize: 10 }} onClick={() => handleStatusChange(dd.id, st)}>{st}</button>
+                          ))}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 12, marginTop: 20, alignItems: 'flex-end' }}>
+            <div style={{ flex: 1 }}>
+              <label style={S.label}>Novo Item DD</label>
+              <input style={S.input} value={newItem} onChange={e => setNewItem(e.target.value)} placeholder="Ex: Certidão de Ônus" onKeyDown={e => e.key === 'Enter' && addCustomItem()} />
+            </div>
+            <button style={S.btn('primary')} onClick={addCustomItem}>{Icons.plus} Adicionar</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// TAB 11: CAPEX PLANNING
+// ============================================================
+const CAPEX_DEFAULTS = [
+  { categoria: 'Pintura Interna', ciclo: 5, custo_m2: 45 },
+  { categoria: 'Pintura Fachada', ciclo: 10, custo_m2: 80 },
+  { categoria: 'Ar Condicionado', ciclo: 8, custo_m2: 60 },
+  { categoria: 'Elevador (revisão)', ciclo: 15, custo_m2: 30 },
+  { categoria: 'Impermeabilização', ciclo: 10, custo_m2: 55 },
+  { categoria: 'Elétrica', ciclo: 15, custo_m2: 40 },
+  { categoria: 'Hidráulica', ciclo: 12, custo_m2: 35 },
+];
+
+function CAPEXPlanningTab({ imoveis, manutencoes }) {
+  const [subtab, setSubtab] = useState('projecao');
+  const [reserveBalance, setReserveBalance] = useState(0);
+  const currentYear = new Date().getFullYear();
+
+  const projecao = useMemo(() => {
+    const years = Array.from({ length: 10 }, (_, i) => currentYear + i);
+    const rows = [];
+    imoveis.forEach(im => {
+      const area = im.area_m2 || 100;
+      const aqYear = im.data_aquisicao ? new Date(im.data_aquisicao).getFullYear() : currentYear - 5;
+      const age = currentYear - aqYear;
+      CAPEX_DEFAULTS.forEach(cap => {
+        const yearCosts = {};
+        let total = 0;
+        years.forEach(yr => {
+          const yearsFromAcq = yr - aqYear;
+          if (yearsFromAcq > 0 && yearsFromAcq % cap.ciclo === 0) {
+            const cost = area * cap.custo_m2;
+            yearCosts[yr] = cost;
+            total += cost;
+          }
+        });
+        if (total > 0) {
+          rows.push({ imovel: im.nome || im.logradouro || 'Imóvel', categoria: cap.categoria, yearCosts, total });
+        }
+      });
+    });
+    return { years, rows };
+  }, [imoveis, currentYear]);
+
+  const totalCapex10y = useMemo(() => projecao.rows.reduce((s, r) => s + r.total, 0), [projecao]);
+  const monthlyContrib = totalCapex10y / 120;
+
+  const lifecycle = useMemo(() => {
+    return imoveis.map(im => {
+      const aqYear = im.data_aquisicao ? new Date(im.data_aquisicao).getFullYear() : currentYear - 5;
+      const age = currentYear - aqYear;
+      const nextMaintenance = CAPEX_DEFAULTS.map(cap => {
+        const nextCycle = Math.ceil(age / cap.ciclo) * cap.ciclo;
+        const yearDue = aqYear + nextCycle;
+        return { ...cap, yearDue, yearsLeft: yearDue - currentYear, cost: (im.area_m2 || 100) * cap.custo_m2 };
+      }).filter(c => c.yearsLeft >= 0).sort((a, b) => a.yearsLeft - b.yearsLeft);
+      return { id: im.id, nome: im.nome || im.logradouro || 'Imóvel', age, area: im.area_m2 || 0, nextMaintenance };
+    });
+  }, [imoveis, currentYear]);
+
+  return (
+    <div>
+      <div style={S.subtabs}>
+        {['projecao', 'reserva', 'lifecycle'].map(t => (
+          <button key={t} style={S.subtab(subtab === t)} onClick={() => setSubtab(t)}>
+            {{ projecao: 'Projeção 10 Anos', reserva: 'Reserve Fund', lifecycle: 'Lifecycle' }[t]}
+          </button>
+        ))}
+      </div>
+
+      {subtab === 'projecao' && (
+        <div style={S.card}>
+          <div style={S.formSection}>Projeção CAPEX — 10 Anos</div>
+          {projecao.rows.length === 0 ? (
+            <div style={S.emptyState}>Cadastre imóveis com data de aquisição e área para gerar projeções.</div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={S.table}>
+                <thead><tr>
+                  <th style={S.th}>Imóvel</th><th style={S.th}>Categoria</th>
+                  {projecao.years.map(y => <th key={y} style={S.th}>{y}</th>)}
+                  <th style={S.th}>Total</th>
+                </tr></thead>
+                <tbody>
+                  {projecao.rows.map((r, idx) => (
+                    <tr key={idx}>
+                      <td style={S.td}>{r.imovel}</td>
+                      <td style={S.td}>{r.categoria}</td>
+                      {projecao.years.map(y => (
+                        <td key={y} style={{ ...S.td, color: r.yearCosts[y] ? '#F87171' : 'var(--text-muted)', fontWeight: r.yearCosts[y] ? 700 : 400 }}>
+                          {r.yearCosts[y] ? fmtR(r.yearCosts[y]) : '—'}
+                        </td>
+                      ))}
+                      <td style={{ ...S.td, fontWeight: 700, color: '#F87171' }}>{fmtR(r.total)}</td>
+                    </tr>
+                  ))}
+                  <tr>
+                    <td colSpan={2} style={{ ...S.td, fontWeight: 800, fontSize: 14 }}>TOTAL</td>
+                    {projecao.years.map(y => {
+                      const colTotal = projecao.rows.reduce((s, r) => s + (r.yearCosts[y] || 0), 0);
+                      return <td key={y} style={{ ...S.td, fontWeight: 700, color: colTotal > 0 ? '#FBBF24' : 'var(--text-muted)' }}>{colTotal > 0 ? fmtR(colTotal) : '—'}</td>;
+                    })}
+                    <td style={{ ...S.td, fontWeight: 800, fontSize: 14, color: '#F87171' }}>{fmtR(totalCapex10y)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {subtab === 'reserva' && (
+        <div>
+          <div style={S.kpiGrid}>
+            <div style={S.kpiCard(true)}>
+              <div style={S.kpiLabel}>CAPEX Total 10 Anos</div>
+              <div style={S.kpiValue('#F87171')}>{fmtR(totalCapex10y)}</div>
+            </div>
+            <div style={S.kpiCard()}>
+              <div style={S.kpiLabel}>Contribuição Mensal Sugerida</div>
+              <div style={S.kpiValue('#60A5FA')}>{fmtR(monthlyContrib)}</div>
+            </div>
+            <div style={S.kpiCard()}>
+              <div style={S.kpiLabel}>Saldo Atual do Fundo</div>
+              <div style={S.kpiValue(reserveBalance >= totalCapex10y / 10 ? '#34D399' : '#FBBF24')}>{fmtR(reserveBalance)}</div>
+            </div>
+            <div style={S.kpiCard()}>
+              <div style={S.kpiLabel}>Cobertura</div>
+              <div style={S.kpiValue(reserveBalance >= totalCapex10y / 10 ? '#34D399' : '#F87171')}>{totalCapex10y > 0 ? fmtPct((reserveBalance / totalCapex10y) * 100) : '0%'}</div>
+            </div>
+          </div>
+          <div style={S.card}>
+            <div style={S.formSection}>Atualizar Saldo do Fundo de Reserva</div>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end' }}>
+              <div style={{ flex: 1 }}>
+                <label style={S.label}>Saldo Atual (R$)</label>
+                <input style={S.input} type="number" value={reserveBalance} onChange={e => setReserveBalance(Number(e.target.value) || 0)} placeholder="0" />
+              </div>
+            </div>
+            <div style={{ marginTop: 16, padding: 16, background: 'var(--bg-surface)', borderRadius: 10, fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+              Meta anual: {fmtR(totalCapex10y / 10)} | Meta mensal: {fmtR(monthlyContrib)} | Gap: {fmtR(Math.max(0, totalCapex10y / 10 - reserveBalance))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {subtab === 'lifecycle' && (
+        <div>
+          {lifecycle.length === 0 ? (
+            <div style={S.emptyState}>Cadastre imóveis para visualizar o ciclo de vida.</div>
+          ) : lifecycle.map(im => (
+            <div key={im.id} style={{ ...S.card, marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>{im.nome}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Idade: {im.age} anos | Área: {im.area}m²</div>
+                </div>
+              </div>
+              {im.nextMaintenance.length === 0 ? (
+                <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Sem manutenções projetadas nos próximos 10 anos.</div>
+              ) : (
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                  {im.nextMaintenance.slice(0, 6).map((m, i) => (
+                    <div key={i} style={{ background: 'var(--bg-surface)', borderRadius: 10, padding: '12px 16px', minWidth: 160, border: m.yearsLeft <= 1 ? '1px solid rgba(248,113,113,0.3)' : '1px solid var(--border)' }}>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: m.yearsLeft <= 1 ? '#F87171' : m.yearsLeft <= 3 ? '#FBBF24' : 'var(--text-secondary)' }}>{m.categoria}</div>
+                      <div style={{ fontSize: 16, fontWeight: 700, marginTop: 4 }}>{m.yearDue}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{m.yearsLeft === 0 ? 'Este ano' : `Em ${m.yearsLeft} ano${m.yearsLeft > 1 ? 's' : ''}`} — {fmtR(m.cost)}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// TAB 12: PIPELINE
+// ============================================================
+const PIPELINE_STAGES = ['Análise', 'Visita', 'Oferta', 'Negociação', 'Fechado', 'Descartado'];
+const PIPELINE_COLORS = { 'Análise': '#60A5FA', 'Visita': '#A78BFA', 'Oferta': '#FBBF24', 'Negociação': '#F97316', 'Fechado': '#34D399', 'Descartado': '#6B7280' };
+const SCORE_CRITERIA = ['Localização', 'Preço', 'Yield', 'Inquilino', 'Estrutura'];
+const EMPTY_DEAL = { nome: '', cidade: '', uf: 'SP', valor: '', cap_rate: '', estagio: 'Análise', observacoes: '', score_localizacao: 5, score_preco: 5, score_yield: 5, score_inquilino: 5, score_estrutura: 5 };
+
+function PipelineTab({ pipeline, onSavePipeline, onUpdatePipeline, onDeletePipeline }) {
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ ...EMPTY_DEAL });
+  const [viewMode, setViewMode] = useState('kanban');
+
+  const avgScore = (d) => {
+    const scores = [d.score_localizacao, d.score_preco, d.score_yield, d.score_inquilino, d.score_estrutura].map(Number).filter(v => !isNaN(v));
+    return scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
+  };
+
+  async function handleSave() {
+    if (!form.nome) { alert('Nome é obrigatório'); return; }
+    await onSavePipeline({ ...form, valor: Number(form.valor) || 0, cap_rate: Number(form.cap_rate) || 0 });
+    setForm({ ...EMPTY_DEAL });
+    setShowForm(false);
+  }
+
+  async function moveStage(id, newStage) {
+    await onUpdatePipeline(id, { estagio: newStage });
+  }
+
+  function scoreColor(v) {
+    if (v >= 8) return '#34D399';
+    if (v >= 5) return '#FBBF24';
+    return '#F87171';
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 24 }}>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button style={S.btn(viewMode === 'kanban' ? 'primary' : '')} onClick={() => setViewMode('kanban')}>Kanban</button>
+          <button style={S.btn(viewMode === 'lista' ? 'primary' : '')} onClick={() => setViewMode('lista')}>Lista</button>
+        </div>
+        <button style={S.btn('primary')} onClick={() => setShowForm(!showForm)}>{Icons.plus} Novo Deal</button>
+      </div>
+
+      {showForm && (
+        <div style={{ ...S.card, marginBottom: 24 }}>
+          <div style={S.formSection}>Novo Deal</div>
+          <div style={S.grid3}>
+            <Field label="Nome" value={form.nome} onChange={v => setForm({ ...form, nome: v })} placeholder="Ex: Galpão Barueri" />
+            <Field label="Cidade" value={form.cidade} onChange={v => setForm({ ...form, cidade: v })} />
+            <Field label="UF" value={form.uf} onChange={v => setForm({ ...form, uf: v })} options={['SP', 'RJ', 'MG', 'PR', 'SC', 'RS', 'BA', 'PE', 'CE', 'DF', 'GO', 'ES']} />
+          </div>
+          <div style={{ ...S.grid3, marginTop: 16 }}>
+            <Field label="Valor (R$)" value={form.valor} onChange={v => setForm({ ...form, valor: v })} type="number" />
+            <Field label="Cap Rate (%)" value={form.cap_rate} onChange={v => setForm({ ...form, cap_rate: v })} type="number" />
+            <Field label="Estágio" value={form.estagio} onChange={v => setForm({ ...form, estagio: v })} options={PIPELINE_STAGES} />
+          </div>
+          <div style={{ marginTop: 16 }}>
+            <label style={S.label}>Score por Critério (1-10)</label>
+            <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
+              {SCORE_CRITERIA.map((c, i) => {
+                const key = 'score_' + c.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ç/g, 'c');
+                const fieldMap = { 'score_localizacao': 'score_localizacao', 'score_preco': 'score_preco', 'score_yield': 'score_yield', 'score_inquilino': 'score_inquilino', 'score_estrutura': 'score_estrutura' };
+                const fk = Object.values(fieldMap)[i];
+                return (
+                  <div key={c} style={{ flex: 1, textAlign: 'center' }}>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase' }}>{c}</div>
+                    <input style={{ ...S.input, textAlign: 'center', padding: '8px 4px' }} type="number" min="1" max="10" value={form[fk]} onChange={e => setForm({ ...form, [fk]: Number(e.target.value) || 1 })} />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div style={{ marginTop: 16 }}>
+            <Field label="Observações" value={form.observacoes} onChange={v => setForm({ ...form, observacoes: v })} placeholder="Notas sobre o deal..." />
+          </div>
+          <div style={{ display: 'flex', gap: 12, marginTop: 20 }}>
+            <button style={S.btn('primary')} onClick={handleSave}>Salvar Deal</button>
+            <button style={S.btn()} onClick={() => { setShowForm(false); setForm({ ...EMPTY_DEAL }); }}>Cancelar</button>
+          </div>
+        </div>
+      )}
+
+      {pipeline.length === 0 && !showForm ? (
+        <div style={S.emptyState}>Nenhum deal no pipeline. Adicione novos deals para acompanhar oportunidades.</div>
+      ) : viewMode === 'kanban' ? (
+        <div style={{ display: 'flex', gap: 16, overflowX: 'auto', paddingBottom: 20 }}>
+          {PIPELINE_STAGES.map(stage => {
+            const deals = pipeline.filter(d => d.estagio === stage);
+            return (
+              <div key={stage} style={{ minWidth: 240, flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, padding: '8px 12px', background: PIPELINE_COLORS[stage] + '15', borderRadius: 10, border: '1px solid ' + PIPELINE_COLORS[stage] + '30' }}>
+                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: PIPELINE_COLORS[stage] }} />
+                  <span style={{ fontSize: 12, fontWeight: 700, color: PIPELINE_COLORS[stage], textTransform: 'uppercase', letterSpacing: '0.5px' }}>{stage}</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 'auto' }}>{deals.length}</span>
+                </div>
+                {deals.map(d => {
+                  const score = avgScore(d);
+                  return (
+                    <div key={d.id} style={{ background: 'var(--bg-card)', borderRadius: 12, padding: 16, marginBottom: 10, border: '1px solid var(--border)' }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>{d.nome}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>{d.cidade}/{d.uf}</div>
+                      {d.valor > 0 && <div style={{ fontSize: 13, fontWeight: 600, color: '#60A5FA', marginBottom: 4 }}>{fmtR(d.valor)}</div>}
+                      {d.cap_rate > 0 && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>Cap Rate: {fmtPct(d.cap_rate)}</div>}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <span style={{ fontSize: 18, fontWeight: 800, color: scoreColor(score) }}>{score.toFixed(1)}</span>
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          {PIPELINE_STAGES.filter(s => s !== stage).slice(0, 3).map(s => (
+                            <button key={s} style={{ background: PIPELINE_COLORS[s] + '20', color: PIPELINE_COLORS[s], border: 'none', borderRadius: 6, padding: '3px 8px', fontSize: 9, fontWeight: 600, cursor: 'pointer' }} onClick={() => moveStage(d.id, s)} title={`Mover para ${s}`}>{s.slice(0, 3)}</button>
+                          ))}
+                        </div>
+                      </div>
+                      <button style={{ ...S.btn('danger'), padding: '4px 10px', fontSize: 10, width: '100%', justifyContent: 'center' }} onClick={() => onDeletePipeline(d.id)}>{Icons.trash} Remover</button>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div style={S.card}>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={S.table}>
+              <thead><tr>
+                <th style={S.th}>Nome</th><th style={S.th}>Cidade</th><th style={S.th}>Valor</th>
+                <th style={S.th}>Cap Rate</th><th style={S.th}>Score</th><th style={S.th}>Estágio</th><th style={S.th}>Ações</th>
+              </tr></thead>
+              <tbody>
+                {pipeline.map(d => {
+                  const score = avgScore(d);
+                  return (
+                    <tr key={d.id}>
+                      <td style={S.td}>{d.nome}</td>
+                      <td style={S.td}>{d.cidade}/{d.uf}</td>
+                      <td style={S.td}>{fmtR(d.valor)}</td>
+                      <td style={S.td}>{fmtPct(d.cap_rate)}</td>
+                      <td style={S.td}><span style={{ fontSize: 16, fontWeight: 800, color: scoreColor(score) }}>{score.toFixed(1)}</span></td>
+                      <td style={S.td}><span style={S.badge(PIPELINE_COLORS[d.estagio])}>{d.estagio}</span></td>
+                      <td style={S.td}>
+                        <button style={{ ...S.btn('danger'), padding: '4px 10px', fontSize: 10 }} onClick={() => onDeletePipeline(d.id)}>{Icons.trash}</button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// TAB 13: RELATÓRIO
+// ============================================================
+function RelatorioTab({ imoveis, recibos, manutencoes }) {
+  const now = new Date();
+  const quarter = Math.ceil((now.getMonth() + 1) / 3);
+
+  const metrics = useMemo(() => {
+    const patrimonio = imoveis.reduce((s, i) => s + (i.valor_mercado || i.custo_aquisicao || 0), 0);
+    const noiAnual = imoveis.reduce((s, i) => s + calcNOI(i), 0);
+    const receitaMensal = imoveis.filter(i => i.status === 'Alugado').reduce((s, i) => s + (i.aluguel || 0), 0);
+    const yieldPort = patrimonio > 0 ? (noiAnual / patrimonio) * 100 : 0;
+    const alugados = imoveis.filter(i => i.status === 'Alugado').length;
+    const vagos = imoveis.filter(i => i.status === 'Vago').length;
+    const vacancia = imoveis.length > 0 ? (vagos / imoveis.length) * 100 : 0;
+    const ocupacao = 100 - vacancia;
+    const totalDivida = imoveis.reduce((s, i) => s + (i.divida || 0), 0);
+    const ltvMedio = patrimonio > 0 ? (totalDivida / patrimonio) * 100 : 0;
+    const inadimplentes = imoveis.filter(i => i.inadimplente).length;
+    const capexPendente = imoveis.reduce((s, i) => s + (i.capex_pendente || 0), 0);
+    const totalManut = manutencoes.reduce((s, m) => s + (m.valor || 0), 0);
+    const prev = { patrimonio: patrimonio * 0.95, noiAnual: noiAnual * 0.95, receitaMensal: receitaMensal * 0.95, yieldPort: yieldPort * 0.95, ocupacao: ocupacao * 0.95 };
+    return { patrimonio, noiAnual, receitaMensal, yieldPort, alugados, vagos, vacancia, ocupacao, totalDivida, ltvMedio, inadimplentes, capexPendente, totalManut, prev };
+  }, [imoveis, manutencoes]);
+
+  function KPICompare({ label, current, previous, fmt, invert }) {
+    const delta = previous > 0 ? ((current - previous) / previous) * 100 : 0;
+    const isPositive = invert ? delta < 0 : delta > 0;
+    return (
+      <div style={S.kpiCard()}>
+        <div style={S.kpiLabel}>{label}</div>
+        <div style={S.kpiValue()}>{fmt(current)}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: isPositive ? '#34D399' : '#F87171' }}>{delta > 0 ? '+' : ''}{fmtPct(delta)}</span>
+          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>vs anterior</span>
+        </div>
+      </div>
+    );
+  }
+
+  const alertas = useMemo(() => {
+    const list = [];
+    imoveis.forEach(im => {
+      if (im.inadimplente) list.push({ msg: `${im.nome || im.logradouro} — inadimplente`, color: '#F87171' });
+      if (im.status === 'Vago') list.push({ msg: `${im.nome || im.logradouro} — vago`, color: '#FBBF24' });
+      const d = diasFimContrato(im);
+      if (d !== null && d <= 90 && d > 0) list.push({ msg: `${im.nome || im.logradouro} — contrato vence em ${d}d`, color: '#F97316' });
+      const ltv = calcLTV(im);
+      if (ltv > 70) list.push({ msg: `${im.nome || im.logradouro} — LTV ${fmtPct(ltv)}`, color: '#F87171' });
+    });
+    return list;
+  }, [imoveis]);
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+        <div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1.5px', fontWeight: 600 }}>Relatório Trimestral</div>
+          <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4 }}>Q{quarter} {now.getFullYear()}</div>
+        </div>
+        <button style={S.btn('primary')} onClick={() => alert('Exportação PDF em desenvolvimento')}>{Icons.report} Exportar PDF</button>
+      </div>
+
+      {/* Sumário Executivo */}
+      <div style={S.card}>
+        <div style={S.formSection}>Sumário Executivo</div>
+        <p style={{ color: 'var(--text-secondary)', lineHeight: 1.8, fontSize: 14 }}>
+          O portfólio conta com <strong>{imoveis.length} ativos</strong> totalizando <strong>{fmtR(metrics.patrimonio)}</strong> em valor de mercado.
+          A receita mensal de aluguéis é de <strong>{fmtR(metrics.receitaMensal)}</strong>, com NOI anualizado de <strong>{fmtR(metrics.noiAnual)}</strong>.
+          A taxa de ocupação está em <strong>{fmtPct(metrics.ocupacao)}</strong> com yield do portfólio de <strong>{fmtPct(metrics.yieldPort)}</strong>.
+          {metrics.inadimplentes > 0 && ` Atenção: ${metrics.inadimplentes} imóvel(is) com inadimplência.`}
+        </p>
+      </div>
+
+      {/* Performance */}
+      <div style={S.card}>
+        <div style={S.formSection}>Performance do Portfólio</div>
+        <div style={S.kpiGrid}>
+          <KPICompare label="Patrimônio" current={metrics.patrimonio} previous={metrics.prev.patrimonio} fmt={fmtR} />
+          <KPICompare label="NOI Anual" current={metrics.noiAnual} previous={metrics.prev.noiAnual} fmt={fmtR} />
+          <KPICompare label="Receita Mensal" current={metrics.receitaMensal} previous={metrics.prev.receitaMensal} fmt={fmtR} />
+          <KPICompare label="Yield" current={metrics.yieldPort} previous={metrics.prev.yieldPort} fmt={v => fmtPct(v)} />
+          <KPICompare label="Ocupação" current={metrics.ocupacao} previous={metrics.prev.ocupacao} fmt={v => fmtPct(v)} />
+        </div>
+      </div>
+
+      {/* NOI Analysis */}
+      <div style={S.card}>
+        <div style={S.formSection}>NOI por Ativo</div>
+        {imoveis.length === 0 ? (
+          <div style={S.emptyState}>Sem dados.</div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={S.table}>
+              <thead><tr>
+                <th style={S.th}>Imóvel</th><th style={S.th}>Receita Anual</th><th style={S.th}>Despesas</th>
+                <th style={S.th}>NOI</th><th style={S.th}>Yield</th>
+              </tr></thead>
+              <tbody>
+                {imoveis.map(im => {
+                  const recAnual = (im.aluguel || 0) * 12;
+                  const noi = calcNOI(im);
+                  const desp = recAnual - noi;
+                  const yld = calcYield(im);
+                  return (
+                    <tr key={im.id}>
+                      <td style={S.td}>{im.nome || im.logradouro || '—'}</td>
+                      <td style={S.td}>{fmtR(recAnual)}</td>
+                      <td style={{ ...S.td, color: '#F87171' }}>{fmtR(desp)}</td>
+                      <td style={{ ...S.td, fontWeight: 700, color: noi >= 0 ? '#34D399' : '#F87171' }}>{fmtR(noi)}</td>
+                      <td style={S.td}>{fmtPct(yld)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Ocupação & Vacância */}
+      <div style={S.card}>
+        <div style={S.formSection}>Ocupação & Vacância</div>
+        <div style={{ display: 'flex', gap: 24 }}>
+          <div style={{ flex: 1, textAlign: 'center', padding: 24, background: 'rgba(52,211,153,0.08)', borderRadius: 12, border: '1px solid rgba(52,211,153,0.2)' }}>
+            <div style={{ fontSize: 36, fontWeight: 800, color: '#34D399' }}>{metrics.alugados}</div>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>Ocupados</div>
+          </div>
+          <div style={{ flex: 1, textAlign: 'center', padding: 24, background: 'rgba(248,113,113,0.08)', borderRadius: 12, border: '1px solid rgba(248,113,113,0.2)' }}>
+            <div style={{ fontSize: 36, fontWeight: 800, color: '#F87171' }}>{metrics.vagos}</div>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>Vagos</div>
+          </div>
+          <div style={{ flex: 1, textAlign: 'center', padding: 24, background: 'rgba(96,165,250,0.08)', borderRadius: 12, border: '1px solid rgba(96,165,250,0.2)' }}>
+            <div style={{ fontSize: 36, fontWeight: 800, color: '#60A5FA' }}>{fmtPct(metrics.ocupacao)}</div>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>Taxa Ocupação</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Alertas */}
+      {alertas.length > 0 && (
+        <div style={S.card}>
+          <div style={S.formSection}>Alertas Críticos</div>
+          {alertas.map((a, i) => (
+            <div key={i} style={S.alertCard(a.color)}>{Icons.alert} {a.msg}</div>
+          ))}
+        </div>
+      )}
+
+      {/* CAPEX & Debt */}
+      <div style={S.grid2}>
+        <div style={S.card}>
+          <div style={S.formSection}>CAPEX Summary</div>
+          <div style={S.kpiLabel}>CAPEX Pendente</div>
+          <div style={S.kpiValue('#FBBF24')}>{fmtR(metrics.capexPendente)}</div>
+          <div style={{ ...S.kpiSub, marginTop: 8 }}>Manutenções realizadas: {fmtR(metrics.totalManut)}</div>
+        </div>
+        <div style={S.card}>
+          <div style={S.formSection}>Debt Overview</div>
+          <div style={S.kpiLabel}>Dívida Total</div>
+          <div style={S.kpiValue('#F87171')}>{fmtR(metrics.totalDivida)}</div>
+          <div style={{ ...S.kpiSub, marginTop: 8 }}>LTV Médio: {fmtPct(metrics.ltvMedio)}</div>
+        </div>
+      </div>
+
+      {/* Próximos Passos */}
+      <div style={S.card}>
+        <div style={S.formSection}>Próximos Passos</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {metrics.vagos > 0 && <div style={S.alertCard('#FBBF24')}>{Icons.home} Prospectar inquilinos para {metrics.vagos} imóvel(is) vago(s)</div>}
+          {metrics.inadimplentes > 0 && <div style={S.alertCard('#F87171')}>{Icons.alert} Acionar cobrança para {metrics.inadimplentes} inadimplente(s)</div>}
+          {metrics.ltvMedio > 60 && <div style={S.alertCard('#F97316')}>{Icons.alert} Avaliar amortização — LTV médio {fmtPct(metrics.ltvMedio)}</div>}
+          {metrics.capexPendente > 0 && <div style={S.alertCard('#60A5FA')}>{Icons.wrench} Executar CAPEX pendente: {fmtR(metrics.capexPendente)}</div>}
+          <div style={S.alertCard('#34D399')}>{Icons.chart} Revisar yields e reavaliar ativos underperforming</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
 // MAIN PAGE COMPONENT
 // ============================================================
 export default function RealEstatePage() {
@@ -1497,6 +2457,9 @@ export default function RealEstatePage() {
   const [recibos, setRecibos] = useState([]);
   const [ocorrencias, setOcorrencias] = useState([]);
   const [manutencoes, setManutencoes] = useState([]);
+  const [pipeline, setPipeline] = useState([]);
+  const [dividas, setDividas] = useState([]);
+  const [ddItems, setDDItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [clients, setClients] = useState([]);
@@ -1537,17 +2500,26 @@ export default function RealEstatePage() {
     let qR = supabase.from('imoveis_recibos').select('*').order('created_at', { ascending: false });
     let qO = supabase.from('imoveis_ocorrencias').select('*').order('created_at', { ascending: false });
     let qM = supabase.from('imoveis_manutencoes').select('*').order('created_at', { ascending: false });
+    let qP = supabase.from('imoveis_pipeline').select('*').order('created_at', { ascending: false });
+    let qD = supabase.from('imoveis_dividas').select('*').order('created_at', { ascending: false });
+    let qDD = supabase.from('imoveis_dd').select('*').order('created_at', { ascending: false });
     if (isAdmin && selectedClient) {
       q = q.eq('user_id', selectedClient);
       qR = qR.eq('user_id', selectedClient);
       qO = qO.eq('user_id', selectedClient);
       qM = qM.eq('user_id', selectedClient);
+      qP = qP.eq('user_id', selectedClient);
+      qD = qD.eq('user_id', selectedClient);
+      qDD = qDD.eq('user_id', selectedClient);
     }
-    const [{ data: i }, { data: r }, { data: o }, { data: m }] = await Promise.all([q, qR, qO, qM]);
+    const [{ data: i }, { data: r }, { data: o }, { data: m }, { data: p }, { data: dv }, { data: dd }] = await Promise.all([q, qR, qO, qM, qP, qD, qDD]);
     setImoveis(i || []);
     setRecibos(r || []);
     setOcorrencias(o || []);
     setManutencoes(m || []);
+    setPipeline(p || []);
+    setDividas(dv || []);
+    setDDItems(dd || []);
     setLoading(false);
   }, [user, isAdmin, selectedClient]);
 
@@ -1589,6 +2561,27 @@ export default function RealEstatePage() {
     await supabase.from('imoveis_manutencoes').insert({ ...data, user_id: user.id, valor: Number(data.valor) || 0 });
     await loadData();
   }
+  async function savePipeline(data) {
+    await supabase.from('imoveis_pipeline').insert({ ...data, user_id: user.id });
+    await loadData();
+  }
+  async function updatePipeline(id, data) {
+    await supabase.from('imoveis_pipeline').update(data).eq('id', id);
+    await loadData();
+  }
+  async function deletePipeline(id) {
+    if (!confirm('Remover este deal?')) return;
+    await supabase.from('imoveis_pipeline').delete().eq('id', id);
+    await loadData();
+  }
+  async function saveDD(data) {
+    await supabase.from('imoveis_dd').insert({ ...data, user_id: user.id });
+    await loadData();
+  }
+  async function updateDD(id, data) {
+    await supabase.from('imoveis_dd').update(data).eq('id', id);
+    await loadData();
+  }
 
   if (!authChecked) return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-primary)', color: 'var(--text-muted)' }}>Carregando...</div>;
   if (!user) {
@@ -1605,6 +2598,12 @@ export default function RealEstatePage() {
     { id: 'valuation', label: 'Valuation', icon: Icons.chart },
     { id: 'decisao', label: 'Decisão', icon: Icons.target },
     { id: 'mercado', label: 'Mercado IA', icon: Icons.brain },
+    { id: 'contratos', label: 'Contratos', icon: Icons.contract },
+    { id: 'divida', label: 'Dívida', icon: Icons.debt },
+    { id: 'dd', label: 'DD Tracker', icon: Icons.shield },
+    { id: 'capex', label: 'CAPEX', icon: Icons.capex },
+    { id: 'pipeline', label: 'Pipeline', icon: Icons.pipeline },
+    { id: 'relatorio', label: 'Relatório', icon: Icons.report },
   ];
 
   return (
@@ -1695,6 +2694,12 @@ export default function RealEstatePage() {
             {tab === 'valuation' && <ValuationTab imoveis={imoveis} />}
             {tab === 'decisao' && <DecisaoTab imoveis={imoveis} />}
             {tab === 'mercado' && <MercadoIATab imoveis={imoveis} />}
+            {tab === 'contratos' && <LeaseManagementTab imoveis={imoveis} />}
+            {tab === 'divida' && <DebtScheduleTab imoveis={imoveis} dividas={dividas} />}
+            {tab === 'dd' && <DDTrackerTab imoveis={imoveis} ddItems={ddItems} onSaveDD={saveDD} onUpdateDD={updateDD} />}
+            {tab === 'capex' && <CAPEXPlanningTab imoveis={imoveis} manutencoes={manutencoes} />}
+            {tab === 'pipeline' && <PipelineTab pipeline={pipeline} onSavePipeline={savePipeline} onUpdatePipeline={updatePipeline} onDeletePipeline={deletePipeline} />}
+            {tab === 'relatorio' && <RelatorioTab imoveis={imoveis} recibos={recibos} manutencoes={manutencoes} />}
           </>
         )}
       </main>
