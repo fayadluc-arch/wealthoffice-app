@@ -52,7 +52,7 @@ Se não encontrar dados suficientes, estime com base no que encontrar. O campo c
           tools: [{ google_search: {} }],
           generationConfig: {
             temperature: 0.2,
-            maxOutputTokens: 1024,
+            maxOutputTokens: 2048,
           },
         }),
       }
