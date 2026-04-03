@@ -468,6 +468,44 @@ function CadastroTab({ imoveis, onSave, onEdit, onDelete, user }) {
             <Field label="Matrícula" value={form.matricula} onChange={v => upd('matricula', v)} placeholder="Nº matrícula" />
           </div>
 
+          {/* Quick Classification — appears after CEP auto-fill */}
+          {cepStatus === 'ok' && (
+            <div style={{ marginBottom: 28 }}>
+              <div style={S.formSection}>Classificação do Imóvel</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
+                {[
+                  { label: 'Residencial', icon: <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>, color: '#34D399', tipos: ['Apartamento', 'Casa', 'Studio'], uso: 'Residencial', desc: 'Apartamento, casa, studio' },
+                  { label: 'Comercial', icon: <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01M16 6h.01M12 6h.01M8 10h.01M16 10h.01M12 10h.01M8 14h.01M16 14h.01M12 14h.01"/></svg>, color: '#60A5FA', tipos: ['Laje Corporativa', 'Varejo', 'Galpão'], uso: 'Comercial', desc: 'Laje, varejo, galpão' },
+                  { label: 'Terreno', icon: <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 15l5-5 4 4 4-4 5 5"/></svg>, color: '#FBBF24', tipos: ['Terreno'], uso: 'Misto', desc: 'Terreno para desenvolvimento' },
+                ].map(c => {
+                  const isActive = c.uso === form.uso && c.tipos.includes(form.tipo);
+                  return (
+                    <div
+                      key={c.label}
+                      onClick={() => {
+                        upd('uso', c.uso);
+                        upd('tipo', c.tipos[0]);
+                      }}
+                      style={{
+                        background: isActive ? c.color + '12' : 'var(--bg-surface)',
+                        border: isActive ? `2px solid ${c.color}` : '1px solid var(--border)',
+                        borderRadius: 16, padding: '24px 20px', cursor: 'pointer',
+                        textAlign: 'center', transition: 'all 0.2s',
+                      }}
+                      onMouseEnter={e => { if (!isActive) e.currentTarget.style.borderColor = c.color + '60'; }}
+                      onMouseLeave={e => { if (!isActive) e.currentTarget.style.borderColor = 'var(--border)'; }}
+                    >
+                      <div style={{ color: isActive ? c.color : 'var(--text-muted)', marginBottom: 12, display: 'flex', justifyContent: 'center' }}>{c.icon}</div>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: isActive ? c.color : 'var(--text-primary)', marginBottom: 4, fontFamily: 'var(--font-serif)' }}>{c.label}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{c.desc}</div>
+                      {isActive && <div style={{ marginTop: 8, fontSize: 11, fontWeight: 600, color: c.color }}>✓ Selecionado</div>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Characteristics */}
           <div style={S.formSection}>Características</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr 1fr', gap: 16, marginBottom: 28 }}>
