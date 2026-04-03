@@ -256,67 +256,9 @@ function Field({ label, value, onChange, type = 'text', options, placeholder, su
 // ============================================================
 // TAB 1: DASHBOARD
 // ============================================================
-function DashboardTab({ imoveis, onUpdateImovel }) {
-  const [estimating, setEstimating] = useState({});
-  const [estimates, setEstimates] = useState({});
-  const estimatedRef = useRef(new Set());
-
-  // Auto-fetch market values for properties missing valor_mercado
-  useEffect(() => {
-    if (!imoveis.length) return;
-    const missing = imoveis.filter(im =>
-      !im.valor_mercado && im.logradouro && im.cidade && !estimatedRef.current.has(im.id)
-    );
-    if (!missing.length) return;
-
-    missing.forEach(async (im) => {
-      estimatedRef.current.add(im.id);
-      setEstimating(prev => ({ ...prev, [im.id]: true }));
-      try {
-        const res = await fetch('/api/real-estate-estimate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            logradouro: im.logradouro, numero: im.numero,
-            bairro: im.bairro, cidade: im.cidade, uf: im.uf,
-            tipo: im.tipo, uso: im.uso, area_m2: Number(im.area_m2) || 70,
-            padrao: im.padrao || 'Médio',
-          }),
-        });
-        const data = await res.json();
-        if (!data.error && (data.valor_mercado || data.valor_venda_estimado)) {
-          setEstimates(prev => ({ ...prev, [im.id]: data }));
-          // Save to database so we don't re-fetch
-          onUpdateImovel(im.id, {
-            valor_mercado: data.valor_mercado || data.valor_venda_estimado,
-            aluguel: im.aluguel || data.aluguel_estimado || 0,
-            iptu_anual: im.iptu_anual || data.iptu_estimado_anual || 0,
-            condominio_mensal: im.condominio_mensal || data.condominio_estimado || 0,
-          });
-        }
-      } catch (err) {
-        console.error('Auto-estimate error for', im.id, err);
-      }
-      setEstimating(prev => ({ ...prev, [im.id]: false }));
-    });
-  }, [imoveis, onUpdateImovel]);
-
-  // Merge estimates into imoveis for display
-  const imoveisWithEstimates = useMemo(() => {
-    return imoveis.map(im => {
-      const est = estimates[im.id];
-      if (!est) return im;
-      return {
-        ...im,
-        valor_mercado: im.valor_mercado || est.valor_venda_estimado,
-        aluguel: im.aluguel || est.aluguel_estimado,
-        _estimated: true,
-      };
-    });
-  }, [imoveis, estimates]);
-
+function DashboardTab({ imoveis, autoEstimating }) {
   const totais = useMemo(() => {
-    const data = imoveisWithEstimates;
+    const data = imoveis;
     const alugados = data.filter(i => i.status === 'Alugado');
     const receitaMensal = alugados.reduce((s, i) => s + (i.aluguel || 0), 0);
     const noiAnual = data.reduce((s, i) => s + calcNOI(i), 0);
@@ -324,9 +266,8 @@ function DashboardTab({ imoveis, onUpdateImovel }) {
     const yieldPort = patrimonio > 0 ? (noiAnual / patrimonio) * 100 : 0;
     const vagos = data.filter(i => i.status === 'Vago').length;
     const vacancia = data.length > 0 ? (vagos / data.length) * 100 : 0;
-    const estimatingCount = Object.values(estimating).filter(Boolean).length;
-    return { receitaMensal, noiAnual, patrimonio, yieldPort, vacancia, alugados: alugados.length, vagos, estimatingCount };
-  }, [imoveisWithEstimates, estimating]);
+    return { receitaMensal, noiAnual, patrimonio, yieldPort, vacancia, alugados: alugados.length, vagos };
+  }, [imoveis]);
 
   const alertas = useMemo(() => {
     const list = [];
@@ -350,7 +291,7 @@ function DashboardTab({ imoveis, onUpdateImovel }) {
         {[
           { label: 'Receita Mensal', value: fmtR(totais.receitaMensal), color: '#34D399', accent: true },
           { label: 'NOI Anual', value: fmtR(totais.noiAnual), color: '#60A5FA' },
-          { label: 'Patrimônio', value: fmtR(totais.patrimonio), sub: totais.estimatingCount > 0 ? `⏳ Estimando ${totais.estimatingCount}...` : null },
+          { label: 'Patrimônio', value: fmtR(totais.patrimonio), sub: autoEstimating > 0 ? `Avaliando ${autoEstimating} imóveis...` : null },
           { label: 'Yield Portfólio', value: fmtPct(totais.yieldPort), color: totais.yieldPort >= 6 ? '#34D399' : '#FBBF24' },
           { label: 'Vacância', value: fmtPct(totais.vacancia), color: totais.vacancia > 10 ? '#F87171' : '#34D399' },
         ].map(k => (
@@ -380,7 +321,7 @@ function DashboardTab({ imoveis, onUpdateImovel }) {
       {/* Advanced KPIs */}
       <div style={{ display: 'flex', gap: 16, marginBottom: 28 }}>
         {(() => {
-          const data = imoveisWithEstimates;
+          const data = imoveis;
           const aluguelAnualTotal = data.reduce((s, i) => s + (i.status === 'Alugado' ? (Number(i.aluguel) || 0) * 12 : 0), 0);
           const custoTotal = data.reduce((s, i) => s + (Number(i.custo_aquisicao) || 0), 0);
           const dividaTotal = data.reduce((s, i) => s + (Number(i.divida) || 0), 0);
@@ -435,12 +376,12 @@ function DashboardTab({ imoveis, onUpdateImovel }) {
                 </tr>
               </thead>
               <tbody>
-                {imoveisWithEstimates.map(im => {
+                {imoveis.map(im => {
                   const noi = calcNOI(im);
                   const y = calcYield(im);
                   const ltv = calcLTV(im);
                   const df = diasFimContrato(im);
-                  const isEstimating = estimating[im.id];
+                  const isEstimating = !im.valor_mercado && autoEstimating > 0;
                   const alerts = [];
                   if (im.inadimplente) alerts.push('Inadimpl.');
                   if (ltv > 70) alerts.push('LTV>' + Math.round(ltv) + '%');
@@ -3242,6 +3183,61 @@ export default function RealEstatePage() {
     await loadData();
   }
 
+  // ============================================================
+  // AUTO-ESTIMATE: avalia automaticamente imóveis sem valor_mercado
+  // ============================================================
+  const autoEstimateRef = useRef(new Set());
+  const [autoEstimating, setAutoEstimating] = useState(0);
+
+  useEffect(() => {
+    if (!imoveis.length || loading) return;
+    const missing = imoveis.filter(im =>
+      !im.valor_mercado && im.logradouro && im.cidade && !autoEstimateRef.current.has(im.id)
+    );
+    if (!missing.length) return;
+
+    // Estimate sequentially (1 at a time) to avoid overloading Gemini
+    (async () => {
+      for (const im of missing) {
+        if (autoEstimateRef.current.has(im.id)) continue;
+        autoEstimateRef.current.add(im.id);
+        setAutoEstimating(prev => prev + 1);
+        try {
+          const res = await fetch('/api/real-estate-estimate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              logradouro: im.logradouro, numero: im.numero,
+              bairro: im.bairro, cidade: im.cidade, uf: im.uf,
+              tipo: im.tipo, uso: im.uso, area_m2: Number(im.area_m2) || 70,
+              padrao: im.padrao || 'Médio',
+            }),
+          });
+          const data = await res.json();
+          if (!data.error && data.valor_mercado) {
+            await supabase.from('imoveis').update({
+              valor_mercado: data.valor_mercado,
+              aluguel: im.aluguel || data.aluguel_estimado || 0,
+              iptu_anual: im.iptu_anual || data.iptu_estimado_anual || 0,
+              condominio_mensal: im.condominio_mensal || data.condominio_estimado || 0,
+            }).eq('id', im.id);
+            // Update local state without full reload
+            setImoveis(prev => prev.map(p => p.id === im.id ? {
+              ...p,
+              valor_mercado: data.valor_mercado,
+              aluguel: p.aluguel || data.aluguel_estimado || 0,
+              iptu_anual: p.iptu_anual || data.iptu_estimado_anual || 0,
+              condominio_mensal: p.condominio_mensal || data.condominio_estimado || 0,
+            } : p));
+          }
+        } catch (err) {
+          console.error('Auto-estimate error for', im.nome || im.logradouro, err);
+        }
+        setAutoEstimating(prev => prev - 1);
+      }
+    })();
+  }, [imoveis, loading]);
+
   if (!authChecked) return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-primary)', color: 'var(--text-muted)' }}>Carregando...</div>;
   if (!user) {
     // Redirect to main page for login
@@ -3340,7 +3336,7 @@ export default function RealEstatePage() {
           <div style={{ textAlign: 'center', padding: 80, color: 'var(--text-muted)' }}>Carregando dados...</div>
         ) : (
           <>
-            {tab === 'dashboard' && <DashboardTab imoveis={imoveis} onUpdateImovel={updateImovel} />}
+            {tab === 'dashboard' && <DashboardTab imoveis={imoveis} autoEstimating={autoEstimating} />}
             {tab === 'portfolio' && <PortfolioWrapper imoveis={imoveis} onSave={saveImovel} onEdit={editImovel} onDelete={deleteImovel} user={user} ddItems={ddItems} onSaveDD={saveDD} onUpdateDD={updateDD} />}
             {tab === 'operacional' && <OperacionalTab imoveis={imoveis} recibos={recibos} ocorrencias={ocorrencias} manutencoes={manutencoes} onSaveRecibo={saveRecibo} onSaveOcorrencia={saveOcorrencia} onSaveManutencao={saveManutencao} onUpdateImovel={updateImovel} />}
             {tab === 'financeiro' && <FinanceiroWrapper imoveis={imoveis} dividas={dividas} manutencoes={manutencoes} />}
