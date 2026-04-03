@@ -2447,6 +2447,75 @@ function RelatorioTab({ imoveis, recibos, manutencoes }) {
 }
 
 // ============================================================
+// WRAPPER: Portfólio (Ativos + Contratos + DD)
+// ============================================================
+function PortfolioWrapper({ imoveis, onSave, onEdit, onDelete, user, ddItems, onSaveDD, onUpdateDD }) {
+  const [section, setSection] = useState('ativos');
+  return (
+    <div>
+      <div style={S.subtabs}>
+        {[
+          { id: 'ativos', label: 'Ativos' },
+          { id: 'contratos', label: 'Contratos' },
+          { id: 'dd', label: 'DD Tracker' },
+        ].map(s => (
+          <button key={s.id} style={S.subtab(section === s.id)} onClick={() => setSection(s.id)}>{s.label}</button>
+        ))}
+      </div>
+      {section === 'ativos' && <CadastroTab imoveis={imoveis} onSave={onSave} onEdit={onEdit} onDelete={onDelete} user={user} />}
+      {section === 'contratos' && <LeaseManagementTab imoveis={imoveis} />}
+      {section === 'dd' && <DDTrackerTab imoveis={imoveis} ddItems={ddItems} onSaveDD={onSaveDD} onUpdateDD={onUpdateDD} />}
+    </div>
+  );
+}
+
+// ============================================================
+// WRAPPER: Financeiro (NOI + Dívida + CAPEX + Fluxo)
+// ============================================================
+function FinanceiroWrapper({ imoveis, dividas, manutencoes }) {
+  const [section, setSection] = useState('noi');
+  return (
+    <div>
+      <div style={S.subtabs}>
+        {[
+          { id: 'noi', label: 'NOI & Fluxo' },
+          { id: 'divida', label: 'Dívida' },
+          { id: 'capex', label: 'CAPEX' },
+        ].map(s => (
+          <button key={s.id} style={S.subtab(section === s.id)} onClick={() => setSection(s.id)}>{s.label}</button>
+        ))}
+      </div>
+      {section === 'noi' && <MotorFinanceiroTab imoveis={imoveis} />}
+      {section === 'divida' && <DebtScheduleTab imoveis={imoveis} dividas={dividas} />}
+      {section === 'capex' && <CAPEXPlanningTab imoveis={imoveis} manutencoes={manutencoes} />}
+    </div>
+  );
+}
+
+// ============================================================
+// WRAPPER: Valuation (Banda + Renda + Decisão + Mercado IA)
+// ============================================================
+function ValuationWrapper({ imoveis }) {
+  const [section, setSection] = useState('valuation');
+  return (
+    <div>
+      <div style={S.subtabs}>
+        {[
+          { id: 'valuation', label: 'Valuation' },
+          { id: 'decisao', label: 'Decisão' },
+          { id: 'mercado', label: 'Mercado IA' },
+        ].map(s => (
+          <button key={s.id} style={S.subtab(section === s.id)} onClick={() => setSection(s.id)}>{s.label}</button>
+        ))}
+      </div>
+      {section === 'valuation' && <ValuationTab imoveis={imoveis} />}
+      {section === 'decisao' && <DecisaoTab imoveis={imoveis} />}
+      {section === 'mercado' && <MercadoIATab imoveis={imoveis} />}
+    </div>
+  );
+}
+
+// ============================================================
 // MAIN PAGE COMPONENT
 // ============================================================
 export default function RealEstatePage() {
@@ -2592,16 +2661,10 @@ export default function RealEstatePage() {
 
   const TABS = [
     { id: 'dashboard', label: 'Dashboard', icon: Icons.dashboard },
-    { id: 'cadastro', label: 'Cadastro', icon: Icons.building },
+    { id: 'portfolio', label: 'Portfólio', icon: Icons.building },
     { id: 'operacional', label: 'Operacional', icon: Icons.wrench },
-    { id: 'motor', label: 'Motor Financeiro', icon: Icons.calculator },
+    { id: 'financeiro', label: 'Financeiro', icon: Icons.calculator },
     { id: 'valuation', label: 'Valuation', icon: Icons.chart },
-    { id: 'decisao', label: 'Decisão', icon: Icons.target },
-    { id: 'mercado', label: 'Mercado IA', icon: Icons.brain },
-    { id: 'contratos', label: 'Contratos', icon: Icons.contract },
-    { id: 'divida', label: 'Dívida', icon: Icons.debt },
-    { id: 'dd', label: 'DD Tracker', icon: Icons.shield },
-    { id: 'capex', label: 'CAPEX', icon: Icons.capex },
     { id: 'pipeline', label: 'Pipeline', icon: Icons.pipeline },
     { id: 'relatorio', label: 'Relatório', icon: Icons.report },
   ];
@@ -2688,16 +2751,10 @@ export default function RealEstatePage() {
         ) : (
           <>
             {tab === 'dashboard' && <DashboardTab imoveis={imoveis} />}
-            {tab === 'cadastro' && <CadastroTab imoveis={imoveis} onSave={saveImovel} onEdit={editImovel} onDelete={deleteImovel} user={user} />}
+            {tab === 'portfolio' && <PortfolioWrapper imoveis={imoveis} onSave={saveImovel} onEdit={editImovel} onDelete={deleteImovel} user={user} ddItems={ddItems} onSaveDD={saveDD} onUpdateDD={updateDD} />}
             {tab === 'operacional' && <OperacionalTab imoveis={imoveis} recibos={recibos} ocorrencias={ocorrencias} manutencoes={manutencoes} onSaveRecibo={saveRecibo} onSaveOcorrencia={saveOcorrencia} onSaveManutencao={saveManutencao} onUpdateImovel={updateImovel} />}
-            {tab === 'motor' && <MotorFinanceiroTab imoveis={imoveis} />}
-            {tab === 'valuation' && <ValuationTab imoveis={imoveis} />}
-            {tab === 'decisao' && <DecisaoTab imoveis={imoveis} />}
-            {tab === 'mercado' && <MercadoIATab imoveis={imoveis} />}
-            {tab === 'contratos' && <LeaseManagementTab imoveis={imoveis} />}
-            {tab === 'divida' && <DebtScheduleTab imoveis={imoveis} dividas={dividas} />}
-            {tab === 'dd' && <DDTrackerTab imoveis={imoveis} ddItems={ddItems} onSaveDD={saveDD} onUpdateDD={updateDD} />}
-            {tab === 'capex' && <CAPEXPlanningTab imoveis={imoveis} manutencoes={manutencoes} />}
+            {tab === 'financeiro' && <FinanceiroWrapper imoveis={imoveis} dividas={dividas} manutencoes={manutencoes} />}
+            {tab === 'valuation' && <ValuationWrapper imoveis={imoveis} />}
             {tab === 'pipeline' && <PipelineTab pipeline={pipeline} onSavePipeline={savePipeline} onUpdatePipeline={updatePipeline} onDeletePipeline={deletePipeline} />}
             {tab === 'relatorio' && <RelatorioTab imoveis={imoveis} recibos={recibos} manutencoes={manutencoes} />}
           </>
