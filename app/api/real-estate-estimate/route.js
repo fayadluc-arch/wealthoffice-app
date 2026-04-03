@@ -18,29 +18,40 @@ export async function POST(request) {
     const tipoStr = tipo || 'Apartamento';
     const padraoStr = padrao || 'Médio';
 
+    // Step 0: If we have address, identify the building/condo first
+    const buildingContext = logradouro && numero
+      ? `\nIMPORTANTE: O imóvel fica em "${enderecoCompleto}, ${bairroStr}". Busque o nome do condomínio/prédio nesse endereço. Use esse nome para filtrar anúncios do MESMO prédio.`
+      : '';
+
     // Step 1: Search for SALE comparables
-    const salePrompt = `Busque no Google anúncios REAIS de ${tipoStr} à VENDA no bairro ${bairroStr}, ${cidadeStr}/${ufStr}.
+    const salePrompt = `Busque AGORA no Google anúncios REAIS de ${tipoStr} de ALTO PADRÃO à VENDA no bairro ${bairroStr}, ${cidadeStr}/${ufStr}.
 
-BUSQUE EXATAMENTE ESTES SITES (abra cada um):
-1. zapimoveis.com.br — busque "${tipoStr} venda ${bairroStr} ${cidadeStr}"
-2. vivareal.com.br — busque "${tipoStr} venda ${bairroStr} ${cidadeStr}"
-3. imovelweb.com.br — busque "${tipoStr} venda ${bairroStr} ${cidadeStr}"
-4. quintoandar.com.br — busque "${tipoStr} comprar ${bairroStr}"
-5. loft.com.br — busque "${bairroStr} ${cidadeStr}"
+IMPORTANTE — PADRÃO DO IMÓVEL: ${padraoStr}
+${padraoStr === 'Alto' || padraoStr === 'Luxo' ? 'BUSQUE SOMENTE apartamentos de alto padrão, lançamentos recentes, prédios novos com acabamento premium, lazer completo. IGNORE apartamentos antigos ou econômicos.' : ''}
+${padraoStr === 'Econômico' ? 'Busque apartamentos populares, MCMV, econômicos.' : ''}
 
-FILTROS: área entre ${Math.round(area*0.7)}m² e ${Math.round(area*1.3)}m², ${tipoStr}, padrão ${padraoStr}
-${logradouro ? `PRIORIZE resultados na rua: ${logradouro}` : ''}
+${buildingContext}
 
-Para CADA anúncio encontrado, extraia: preço, área, R$/m²
+FAÇA ESTAS BUSCAS NO GOOGLE:
+${logradouro && numero ? `0. "${logradouro} ${numero}" ${cidadeStr} condominio prédio — IDENTIFIQUE O NOME DO PRÉDIO` : ''}
+1. ${logradouro ? `"${logradouro}" ${numero || ''} ${bairroStr} venda ${tipoStr}` : `site:zapimoveis.com.br ${tipoStr} venda ${bairroStr} ${cidadeStr} ${area}m2`}
+2. site:zapimoveis.com.br ${tipoStr} venda ${bairroStr} ${cidadeStr} ${area}m2 ${padraoStr === 'Alto' || padraoStr === 'Luxo' ? 'alto padrão' : ''}
+3. site:vivareal.com.br ${tipoStr} venda ${bairroStr} ${cidadeStr} ${area}m2
+4. site:loft.com.br ${bairroStr} ${cidadeStr} venda
+5. site:finderimoveis.com.br ${tipoStr} ${bairroStr} ${cidadeStr}
+6. site:imovelweb.com.br ${tipoStr} venda ${bairroStr} ${cidadeStr}
 
-Depois calcule:
-- R$/m² MÍNIMO entre todos anúncios
-- R$/m² MÉDIO
-- R$/m² MÁXIMO
-- Quantos anúncios encontrou no total
+FILTROS OBRIGATÓRIOS:
+- Área entre ${Math.round(area*0.7)}m² e ${Math.round(area*1.3)}m²
+- Tipo: ${tipoStr}
+- Padrão: ${padraoStr} (NÃO misture com padrões diferentes)
+${logradouro ? `- Priorize rua: ${logradouro}` : ''}
+
+PARA CADA ANÚNCIO extraia: preço de venda e área. Calcule R$/m².
+Liste pelo menos 5 anúncios reais encontrados.
 
 Responda SOMENTE JSON puro sem markdown:
-{"m2_min":0,"m2_med":0,"m2_max":0,"amostras":0,"fonte":"ZAP, VivaReal"}`;
+{"m2_min":0,"m2_med":0,"m2_max":0,"amostras":0,"fonte":"ZAP, Loft, Finder"}`;
 
     // Step 2: Search for RENTAL comparables
     const rentalPrompt = `Busque no Google anúncios REAIS de ${tipoStr} para ALUGAR no bairro ${bairroStr}, ${cidadeStr}/${ufStr}.
