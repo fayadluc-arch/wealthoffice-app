@@ -595,11 +595,11 @@ function ModuleHub({ profileName, isAdmin, onSelectModule, onLogout }) {
       stats: 'Ativo',
     },
     {
-      id: 'realestate', title: 'Real Estate', status: 'coming',
-      desc: 'Imóveis, FIIs, participações imobiliárias e contratos de locação',
-      icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>,
+      id: 'realestate', title: 'Real Estate', status: 'active',
+      desc: 'Gestão completa de imóveis: NOI, yield, reajuste, valuation e decisão',
+      icon: <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01M16 6h.01M12 6h.01M8 10h.01M16 10h.01M12 10h.01M8 14h.01M16 14h.01M12 14h.01"/></svg>,
       color: 'var(--blue)',
-      stats: 'Em breve',
+      stats: 'Ativo',
     },
     {
       id: 'privateequity', title: 'Private Equity & VC', status: 'coming',
@@ -668,7 +668,11 @@ function ModuleHub({ profileName, isAdmin, onSelectModule, onLogout }) {
           {modules.map(m => (
             <div
               key={m.id}
-              onClick={() => m.status === 'active' && onSelectModule(m.id)}
+              onClick={() => {
+                if (m.status !== 'active') return;
+                if (m.id === 'realestate') { window.location.href = '/real-estate'; return; }
+                onSelectModule(m.id);
+              }}
               style={{
                 background: m.status === 'active'
                   ? 'linear-gradient(135deg, var(--bg-card) 0%, var(--bg-surface) 100%)'
