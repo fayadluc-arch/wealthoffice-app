@@ -275,9 +275,10 @@ function DashboardTab({ imoveis, onUpdateImovel }) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            logradouro: im.logradouro, numero: im.numero, complemento: im.complemento,
+            logradouro: im.logradouro, numero: im.numero,
             bairro: im.bairro, cidade: im.cidade, uf: im.uf,
             tipo: im.tipo, uso: im.uso, area_m2: Number(im.area_m2) || 70,
+            padrao: im.padrao || 'Médio',
           }),
         });
         const data = await res.json();
