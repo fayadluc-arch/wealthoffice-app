@@ -435,6 +435,7 @@ function CadastroTab({ imoveis, onSave, onEdit, onDelete, user }) {
   const [saving, setSaving] = useState(false);
   const [estimating, setEstimating] = useState(false);
   const [estimateData, setEstimateData] = useState(null);
+  const autoEstimateKeyRef = useRef('');
 
   const upd = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -452,6 +453,49 @@ function CadastroTab({ imoveis, onSave, onEdit, onDelete, user }) {
       })
       .catch(() => setCepStatus('error'));
   }, [form.cep]);
+
+  // AUTO-ESTIMATE: triggers when address + number + type + area are filled
+  useEffect(() => {
+    if (cepStatus !== 'ok' || !form.logradouro || !form.cidade || !form.numero) return;
+    // Build a key to avoid re-fetching for the same params
+    const key = `${form.logradouro}|${form.numero}|${form.bairro}|${form.cidade}|${form.tipo}|${form.area_m2 || 70}|${form.padrao}`;
+    if (key === autoEstimateKeyRef.current) return;
+    autoEstimateKeyRef.current = key;
+
+    // Debounce: wait 1.5s after last change
+    const timer = setTimeout(async () => {
+      setEstimating(true);
+      setEstimateData(null);
+      try {
+        const res = await fetch('/api/real-estate-estimate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            logradouro: form.logradouro, numero: form.numero,
+            bairro: form.bairro, cidade: form.cidade, uf: form.uf,
+            tipo: form.tipo || 'Apartamento', uso: form.uso,
+            area_m2: Number(form.area_m2) || 70, padrao: form.padrao || 'Médio',
+          }),
+        });
+        const data = await res.json();
+        if (!data.error) {
+          setEstimateData(data);
+          // Auto-fill form fields that are empty
+          setForm(f => ({
+            ...f,
+            valor_mercado: f.valor_mercado || data.valor_mercado || 0,
+            aluguel: f.aluguel || data.aluguel_estimado || 0,
+            iptu_anual: f.iptu_anual || data.iptu_estimado_anual || 0,
+            condominio_mensal: f.condominio_mensal || data.condominio_estimado || 0,
+          }));
+        }
+      } catch (err) {
+        console.error('Auto-estimate error:', err);
+      }
+      setEstimating(false);
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [cepStatus, form.logradouro, form.numero, form.bairro, form.cidade, form.tipo, form.area_m2, form.padrao, form.uso]);
 
   async function handleSave() {
     setSaving(true);
@@ -580,49 +624,41 @@ function CadastroTab({ imoveis, onSave, onEdit, onDelete, user }) {
           {/* Auto-estimate from market data */}
           {cepStatus === 'ok' && form.bairro && form.cidade && (
             <div style={{ marginBottom: 28, padding: 24, background: 'linear-gradient(135deg, rgba(96,165,250,0.06) 0%, rgba(96,165,250,0.02) 100%)', borderRadius: 16, border: '1px solid rgba(96,165,250,0.15)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: estimateData ? 20 : 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: (estimateData || estimating) ? 20 : 0 }}>
                 <div>
                   <div style={{ fontSize: 15, fontWeight: 700, fontFamily: 'var(--font-serif)', marginBottom: 4 }}>Avaliação de Mercado (ABNT NBR 14653-2)</div>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                     Método comparativo direto · ZAP, Viva Real, ImovelWeb, QuintoAndar, Loft, Lopes — {form.bairro}, {form.cidade}/{form.uf}
                   </div>
                 </div>
-                <button
-                  style={{ ...S.btn('primary'), opacity: estimating ? 0.6 : 1 }}
-                  disabled={estimating}
-                  onClick={async () => {
-                    setEstimating(true);
-                    setEstimateData(null);
-                    try {
-                      const res = await fetch('/api/real-estate-estimate', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          logradouro: form.logradouro, numero: form.numero,
-                          bairro: form.bairro, cidade: form.cidade, uf: form.uf,
-                          tipo: form.tipo, uso: form.uso, area_m2: Number(form.area_m2) || 70, padrao: form.padrao,
-                        }),
-                      });
-                      const data = await res.json();
-                      if (!data.error) {
-                        setEstimateData(data);
-                        setForm(f => ({
-                          ...f,
-                          valor_mercado: f.valor_mercado || data.valor_mercado || f.valor_mercado,
-                          aluguel: f.aluguel || data.aluguel_estimado || f.aluguel,
-                          iptu_anual: f.iptu_anual || data.iptu_estimado_anual || f.iptu_anual,
-                          condominio_mensal: f.condominio_mensal || data.condominio_estimado || f.condominio_mensal,
-                        }));
-                      } else {
-                        alert('Erro: ' + (data.error || 'tente novamente'));
-                      }
-                    } catch (err) { alert('Erro: ' + err.message); }
-                    setEstimating(false);
-                  }}
-                >
-                  {estimating ? '⏳ Avaliando...' : '🔍 Avaliar Valor de Mercado'}
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  {estimating && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#60A5FA', fontSize: 13, fontWeight: 600 }}>
+                      <div style={{ width: 16, height: 16, border: '2px solid #60A5FA', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                      Avaliando{form.numero ? ` ${form.logradouro}, ${form.numero}` : ''}...
+                    </div>
+                  )}
+                  {!estimating && estimateData && (
+                    <span style={{ color: '#34D399', fontSize: 12, fontWeight: 600 }}>Avaliado</span>
+                  )}
+                  {!estimating && !estimateData && form.numero && (
+                    <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>Preencha o número para avaliar</span>
+                  )}
+                  <button
+                    style={{ ...S.btn('default'), fontSize: 11, padding: '6px 12px', opacity: estimating ? 0.5 : 1 }}
+                    disabled={estimating}
+                    onClick={() => { autoEstimateKeyRef.current = ''; setEstimateData(null); }}
+                  >
+                    Reavaliar
+                  </button>
+                </div>
               </div>
+              {estimating && !estimateData && (
+                <div style={{ textAlign: 'center', padding: '30px 0', color: 'var(--text-muted)', fontSize: 13 }}>
+                  <div style={{ width: 32, height: 32, border: '3px solid rgba(96,165,250,0.3)', borderTopColor: '#60A5FA', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 12px' }} />
+                  Buscando comparáveis no prédio e região...
+                </div>
+              )}
               {estimateData && (
                 <div>
                   {/* Main value */}
