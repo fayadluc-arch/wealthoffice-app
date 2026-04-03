@@ -412,21 +412,41 @@ function CadastroTab({ imoveis, onSave, onEdit, onDelete, user }) {
 
   async function handleSave() {
     setSaving(true);
-    const data = { ...form };
-    // Convert numeric fields
-    ['area_m2', 'quartos', 'custo_aquisicao', 'valor_mercado', 'divida', 'parcela_mensal', 'aluguel', 'taxa_adm', 'iptu_anual', 'condominio_mensal', 'seguro_anual', 'capex_pendente'].forEach(k => {
-      data[k] = data[k] === '' || data[k] == null ? 0 : Number(data[k]);
+    const data = {};
+    // Only include non-empty fields
+    Object.entries(form).forEach(([k, v]) => {
+      if (v === '' || v === null || v === undefined) return;
+      data[k] = v;
     });
+    // Convert numeric fields (set 0 if empty)
+    ['area_m2', 'quartos', 'custo_aquisicao', 'valor_mercado', 'divida', 'parcela_mensal', 'aluguel', 'taxa_adm', 'iptu_anual', 'condominio_mensal', 'seguro_anual', 'capex_pendente'].forEach(k => {
+      data[k] = data[k] == null || data[k] === '' ? 0 : Number(data[k]);
+    });
+    // Ensure required defaults
     data.user_id = user.id;
-    if (editingId) {
-      await onEdit(editingId, data);
-    } else {
-      await onSave(data);
+    data.tipo = data.tipo || 'Apartamento';
+    data.uso = data.uso || 'Residencial';
+    data.status = data.status || 'Vago';
+    data.titular = data.titular || 'PF';
+    data.uf = data.uf || 'SP';
+    data.inadimplente = data.inadimplente || false;
+    // Date fields — convert empty to null
+    ['data_aquisicao', 'contrato_inicio', 'contrato_fim', 'data_proximo_reajuste'].forEach(k => {
+      if (!data[k]) data[k] = null;
+    });
+    try {
+      if (editingId) {
+        await onEdit(editingId, data);
+      } else {
+        await onSave(data);
+      }
+      setForm({ ...EMPTY_IMOVEL });
+      setEditingId(null);
+      setSubtab('todos');
+    } catch (err) {
+      alert('Erro ao salvar: ' + (err.message || err));
     }
-    setForm({ ...EMPTY_IMOVEL });
-    setEditingId(null);
     setSaving(false);
-    setSubtab('todos');
   }
 
   function startEdit(im) {
@@ -535,6 +555,7 @@ function CadastroTab({ imoveis, onSave, onEdit, onDelete, user }) {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
+                          logradouro: form.logradouro, numero: form.numero, complemento: form.complemento,
                           bairro: form.bairro, cidade: form.cidade, uf: form.uf,
                           tipo: form.tipo, uso: form.uso, area_m2: Number(form.area_m2) || 70,
                         }),

@@ -4,28 +4,41 @@ const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
 
 export async function POST(request) {
   try {
-    const { bairro, cidade, uf, tipo, uso, area_m2 } = await request.json();
+    const { logradouro, numero, bairro, cidade, uf, tipo, uso, area_m2, complemento } = await request.json();
 
     if (!GOOGLE_API_KEY) {
       return NextResponse.json({ error: 'Google API key not configured' }, { status: 500 });
     }
 
-    const location = [bairro, cidade, uf].filter(Boolean).join(', ');
+    // Build the most specific address possible
+    const enderecoCompleto = [logradouro, numero, complemento].filter(Boolean).join(', ');
+    const bairroStr = bairro || '';
+    const cidadeStr = [cidade, uf].filter(Boolean).join('/');
     const tipoDesc = tipo || 'imóvel';
     const areaDesc = area_m2 ? `${area_m2}m²` : '';
 
-    const prompt = `Pesquise preços ATUAIS de mercado para ${tipoDesc} ${uso || ''} ${areaDesc} em ${location}, Brasil.
+    const prompt = `Pesquise preços ATUAIS e ESPECÍFICOS de mercado para ${tipoDesc} ${uso || ''} ${areaDesc} no seguinte endereço EXATO:
 
-Busque em sites como QuintoAndar, ZAP Imóveis, Viva Real, Lopes, ImovelWeb para encontrar:
-1. Preço médio de VENDA por m² na região
-2. Preço médio de ALUGUEL por m² na região
-3. Valor estimado de venda do imóvel ${areaDesc ? `de ${areaDesc}` : ''}
-4. Valor estimado de aluguel mensal
-5. IPTU anual estimado
-6. Condomínio mensal estimado (se aplicável)
-7. Yield médio da região (aluguel/valor venda anualizado)
+ENDEREÇO: ${enderecoCompleto}
+BAIRRO: ${bairroStr}
+CIDADE: ${cidadeStr}
 
-IMPORTANTE: Responda SOMENTE em JSON válido, sem markdown, sem texto antes ou depois. Use este formato exato:
+INSTRUÇÕES:
+1. Busque anúncios ATIVOS em QuintoAndar, ZAP Imóveis, Viva Real, Lopes, ImovelWeb para essa RUA ESPECÍFICA (${logradouro || 'região'})
+2. Se não encontrar nessa rua exata, busque nas ruas adjacentes do mesmo bairro (${bairroStr})
+3. Priorize imóveis do mesmo tipo (${tipoDesc}) e área similar (${areaDesc || 'qualquer'})
+4. Compare com pelo menos 3-5 anúncios reais encontrados
+
+Retorne:
+- Preço médio de VENDA por m² nessa rua/quadra específica
+- Preço médio de ALUGUEL por m² nessa rua/quadra
+- Valor estimado de venda para um ${tipoDesc} de ${areaDesc || '70m²'} nesse endereço
+- Aluguel mensal estimado para esse endereço específico
+- IPTU anual estimado para esse endereço
+- Condomínio mensal estimado (baseado em prédios na região)
+- Yield da micro-região (aluguel anual / valor venda)
+
+IMPORTANTE: Responda SOMENTE em JSON válido, sem markdown, sem texto antes ou depois:
 {
   "preco_m2_venda": 12000,
   "preco_m2_aluguel": 50,
@@ -34,14 +47,15 @@ IMPORTANTE: Responda SOMENTE em JSON válido, sem markdown, sem texto antes ou d
   "iptu_estimado_anual": 3600,
   "condominio_estimado": 800,
   "yield_regiao": 5.2,
-  "confianca": "média",
-  "fonte": "QuintoAndar, ZAP Imóveis",
-  "observacao": "Valores baseados em anúncios ativos na região em abril/2026"
+  "confianca": "alta",
+  "fonte": "QuintoAndar (3 anúncios), ZAP (2 anúncios)",
+  "endereco_referencia": "${enderecoCompleto}, ${bairroStr}",
+  "anuncios_encontrados": 5,
+  "observacao": "Baseado em 5 anúncios ativos na ${logradouro || 'região'} e ruas adjacentes"
 }
 
-Se não encontrar dados suficientes, estime com base no que encontrar. O campo confianca pode ser "alta", "média" ou "baixa".`;
+O campo confianca: "alta" se encontrou anúncios nessa rua, "média" se usou ruas adjacentes, "baixa" se estimou pelo bairro.`;
 
-    // Gemini API with Google Search grounding
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GOOGLE_API_KEY}`,
       {
@@ -51,7 +65,7 @@ Se não encontrar dados suficientes, estime com base no que encontrar. O campo c
           contents: [{ parts: [{ text: prompt }] }],
           tools: [{ google_search: {} }],
           generationConfig: {
-            temperature: 0.2,
+            temperature: 0.1,
             maxOutputTokens: 2048,
           },
         }),
