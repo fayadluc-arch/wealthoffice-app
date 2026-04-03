@@ -6,26 +6,52 @@ const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemi
 // ============================================================
 // GEMINI HELPER
 // ============================================================
-async function callGemini(prompt, { temperature = 0.1, maxTokens = 8192 } = {}) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 90000); // 90s timeout per call
-  try {
-    const res = await fetch(`${GEMINI_URL}?key=${GOOGLE_API_KEY}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      signal: controller.signal,
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        tools: [{ google_search: {} }],
-        generationConfig: { temperature, maxOutputTokens: maxTokens },
-      }),
-    });
-    if (!res.ok) throw new Error(`Gemini ${res.status}`);
-    const data = await res.json();
-    return (data.candidates?.[0]?.content?.parts?.map(p => p.text).filter(Boolean) || []).join('');
-  } finally {
-    clearTimeout(timeout);
+async function callGemini(prompt, { temperature = 0.1, maxTokens = 8192, retries = 1 } = {}) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 90000);
+    try {
+      const res = await fetch(`${GEMINI_URL}?key=${GOOGLE_API_KEY}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          tools: [{ google_search: {} }],
+          generationConfig: { temperature, maxOutputTokens: maxTokens },
+        }),
+      });
+      if (!res.ok) {
+        if (attempt < retries && (res.status === 429 || res.status >= 500)) {
+          console.log(`[estimate] Gemini ${res.status}, retrying in 2s...`);
+          clearTimeout(timeout);
+          await new Promise(r => setTimeout(r, 2000));
+          continue;
+        }
+        throw new Error(`Gemini ${res.status}`);
+      }
+      const data = await res.json();
+      const text = (data.candidates?.[0]?.content?.parts?.map(p => p.text).filter(Boolean) || []).join('');
+      if (!text && attempt < retries) {
+        console.log('[estimate] Empty Gemini response, retrying...');
+        clearTimeout(timeout);
+        await new Promise(r => setTimeout(r, 1000));
+        continue;
+      }
+      return text;
+    } catch (err) {
+      clearTimeout(timeout);
+      if (attempt < retries && err.name === 'AbortError') {
+        console.log('[estimate] Gemini timeout, retrying...');
+        await new Promise(r => setTimeout(r, 1000));
+        continue;
+      }
+      throw err;
+    } finally {
+      clearTimeout(timeout);
+    }
   }
+  return '';
 }
 
 // ============================================================
@@ -138,11 +164,11 @@ function weightedMedian(listings, targetArea) {
 // CONFIDENCE SCORE
 // ============================================================
 function computeConfidence(nSamples, nPasses, cv) {
-  const nScore = Math.min(nSamples / 8, 1);
-  const cvScore = 1 - Math.min(cv / 0.3, 1);
-  const passScore = nPasses >= 2 ? 0.8 : 0.5;
+  const nScore = Math.min(nSamples / 6, 1); // 6+ samples is good
+  const cvScore = 1 - Math.min(cv / 0.5, 1); // CV < 15% excellent, > 50% terrible
+  const passScore = nPasses >= 2 ? 0.9 : 0.6;
   const score = 0.4 * nScore + 0.35 * cvScore + 0.25 * passScore;
-  const label = score >= 0.7 ? 'alta' : score >= 0.45 ? 'media' : 'baixa';
+  const label = score >= 0.65 ? 'alta' : score >= 0.4 ? 'media' : 'baixa';
   return { score: Number(score.toFixed(2)), label, fatores: { amostras: Number(nScore.toFixed(2)), variacao: Number(cvScore.toFixed(2)), passes: Number(passScore.toFixed(2)) } };
 }
 
@@ -287,11 +313,16 @@ export async function POST(request) {
 
     // Run Pass 1 (building-specific) + Pass 2 (regional) in parallel
     // Pass 3 (rental/costs) runs in parallel too
+    console.log('[estimate] Starting 3 parallel passes...');
     const [r1, r2, r3] = await Promise.allSettled([
       callGemini(buildPass1Prompt(params)),
       callGemini(buildPass2Prompt(params)),
       callGemini(buildPass3Prompt(params)),
     ]);
+
+    console.log('[estimate] Pass 1:', r1.status, r1.status === 'rejected' ? r1.reason?.message : `${(r1.value || '').length} chars`);
+    console.log('[estimate] Pass 2:', r2.status, r2.status === 'rejected' ? r2.reason?.message : `${(r2.value || '').length} chars`);
+    console.log('[estimate] Pass 3:', r3.status, r3.status === 'rejected' ? r3.reason?.message : `${(r3.value || '').length} chars`);
 
     // Parse results
     let allListings = [];
@@ -304,11 +335,13 @@ export async function POST(request) {
     // Pass 1: building-specific + location analysis
     if (r1.status === 'fulfilled') {
       const d = parseJSON(r1.value);
+      console.log('[estimate] Pass 1 parsed:', d ? 'OK' : 'FAIL', d ? `listings: ${(d.listings || []).length}` : `raw: ${r1.value.substring(0, 200)}`);
       if (d) {
         if (d.empreendimento && d.empreendimento.nome) empreendimento = d.empreendimento;
         analiseLocalizacao = d.analise_localizacao || '';
         const raw = Array.isArray(d.listings) ? d.listings : (Array.isArray(d) ? d : []);
         const valid = raw.map(l => validateListing(l)).filter(Boolean);
+        console.log('[estimate] Pass 1 valid listings:', valid.length, 'of', raw.length);
         if (valid.length > 0) nPasses++;
         allListings.push(...valid);
       }
@@ -317,11 +350,13 @@ export async function POST(request) {
     // Pass 2: regional market + FipeZap reference
     if (r2.status === 'fulfilled') {
       const d = parseJSON(r2.value);
+      console.log('[estimate] Pass 2 parsed:', d ? 'OK' : 'FAIL', d ? `listings: ${(d.listings || []).length}` : `raw: ${r2.value.substring(0, 200)}`);
       if (d) {
         if (d.indice_referencia && d.indice_referencia.fipezap_m2 > 0) indiceReferencia = d.indice_referencia;
         tendencia = d.tendencia || '';
         const raw = Array.isArray(d.listings) ? d.listings : (Array.isArray(d) ? d : []);
         const valid = raw.map(l => validateListing(l)).filter(Boolean);
+        console.log('[estimate] Pass 2 valid listings:', valid.length, 'of', raw.length);
         if (valid.length > 0) nPasses++;
         allListings.push(...valid);
       }
