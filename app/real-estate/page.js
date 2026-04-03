@@ -281,11 +281,11 @@ function DashboardTab({ imoveis, onUpdateImovel }) {
           }),
         });
         const data = await res.json();
-        if (!data.error && data.valor_venda_estimado) {
+        if (!data.error && (data.valor_mercado || data.valor_venda_estimado)) {
           setEstimates(prev => ({ ...prev, [im.id]: data }));
           // Save to database so we don't re-fetch
           onUpdateImovel(im.id, {
-            valor_mercado: data.valor_venda_estimado,
+            valor_mercado: data.valor_mercado || data.valor_venda_estimado,
             aluguel: im.aluguel || data.aluguel_estimado || 0,
             iptu_anual: im.iptu_anual || data.iptu_estimado_anual || 0,
             condominio_mensal: im.condominio_mensal || data.condominio_estimado || 0,
@@ -610,9 +610,9 @@ function CadastroTab({ imoveis, onSave, onEdit, onDelete, user }) {
             <div style={{ marginBottom: 28, padding: 24, background: 'linear-gradient(135deg, rgba(96,165,250,0.06) 0%, rgba(96,165,250,0.02) 100%)', borderRadius: 16, border: '1px solid rgba(96,165,250,0.15)' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: estimateData ? 20 : 0 }}>
                 <div>
-                  <div style={{ fontSize: 15, fontWeight: 700, fontFamily: 'var(--font-serif)', marginBottom: 4 }}>Estimativa de Mercado</div>
+                  <div style={{ fontSize: 15, fontWeight: 700, fontFamily: 'var(--font-serif)', marginBottom: 4 }}>Avaliação de Mercado (ABNT NBR 14653-2)</div>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                    Pesquisa automática em QuintoAndar, ZAP, Viva Real, Lopes — {form.bairro}, {form.cidade}/{form.uf}
+                    Método comparativo direto · ZAP, Viva Real, ImovelWeb, QuintoAndar, Loft, Lopes — {form.bairro}, {form.cidade}/{form.uf}
                   </div>
                 </div>
                 <button
@@ -626,71 +626,83 @@ function CadastroTab({ imoveis, onSave, onEdit, onDelete, user }) {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                          logradouro: form.logradouro, numero: form.numero, complemento: form.complemento,
+                          logradouro: form.logradouro, numero: form.numero,
                           bairro: form.bairro, cidade: form.cidade, uf: form.uf,
-                          tipo: form.tipo, uso: form.uso, area_m2: Number(form.area_m2) || 70,
+                          tipo: form.tipo, uso: form.uso, area_m2: Number(form.area_m2) || 70, padrao: form.padrao,
                         }),
                       });
                       const data = await res.json();
                       if (!data.error) {
                         setEstimateData(data);
-                        // Auto-fill if fields are empty
                         setForm(f => ({
                           ...f,
-                          valor_mercado: f.valor_mercado || data.valor_venda_estimado || f.valor_mercado,
+                          valor_mercado: f.valor_mercado || data.valor_mercado || f.valor_mercado,
                           aluguel: f.aluguel || data.aluguel_estimado || f.aluguel,
                           iptu_anual: f.iptu_anual || data.iptu_estimado_anual || f.iptu_anual,
                           condominio_mensal: f.condominio_mensal || data.condominio_estimado || f.condominio_mensal,
                         }));
                       } else {
-                        alert('Erro na estimativa: ' + (data.error || 'tente novamente'));
+                        alert('Erro: ' + (data.error || 'tente novamente'));
                       }
-                    } catch (err) {
-                      alert('Erro: ' + err.message);
-                    }
+                    } catch (err) { alert('Erro: ' + err.message); }
                     setEstimating(false);
                   }}
                 >
-                  {estimating ? '⏳ Pesquisando...' : '🔍 Estimar Valores de Mercado'}
+                  {estimating ? '⏳ Avaliando...' : '🔍 Avaliar Valor de Mercado'}
                 </button>
               </div>
               {estimateData && (
                 <div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 16 }}>
-                    {[
-                      { label: 'Preço/m² Venda', value: fmtR(estimateData.preco_m2_venda), color: '#60A5FA' },
-                      { label: 'Valor Venda Estimado', value: fmtR(estimateData.valor_venda_estimado), color: '#34D399' },
-                      { label: 'Aluguel Estimado', value: fmtR(estimateData.aluguel_estimado) + '/mês', color: '#FBBF24' },
-                      { label: 'Yield Região', value: fmtPct(estimateData.yield_regiao), color: '#A78BFA' },
-                    ].map(k => (
-                      <div key={k.label} style={{ background: 'var(--bg-card)', borderRadius: 12, padding: '16px 20px', border: '1px solid var(--border)' }}>
-                        <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>{k.label}</div>
-                        <div style={{ fontSize: 18, fontWeight: 700, color: k.color, fontVariantNumeric: 'tabular-nums' }}>{k.value}</div>
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 12 }}>
-                    {[
-                      { label: 'Preço/m² Aluguel', value: fmtR(estimateData.preco_m2_aluguel) + '/m²' },
-                      { label: 'IPTU Anual Est.', value: fmtR(estimateData.iptu_estimado_anual) },
-                      { label: 'Condomínio Est.', value: fmtR(estimateData.condominio_estimado) + '/mês' },
-                    ].map(k => (
-                      <div key={k.label} style={{ background: 'var(--bg-card)', borderRadius: 12, padding: '12px 16px', border: '1px solid var(--border)' }}>
-                        <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>{k.label}</div>
-                        <div style={{ fontSize: 15, fontWeight: 600 }}>{k.value}</div>
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                      Confiança: <span style={{ color: estimateData.confianca === 'alta' ? '#34D399' : estimateData.confianca === 'média' ? '#FBBF24' : '#F87171', fontWeight: 600 }}>{estimateData.confianca}</span>
-                      {estimateData.fonte && <span> · Fontes: {estimateData.fonte}</span>}
+                  {/* Main value */}
+                  <div style={{ textAlign: 'center', padding: 20, background: 'var(--bg-card)', borderRadius: 14, border: '1px solid rgba(96,165,250,0.2)', marginBottom: 16 }}>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: 6 }}>Valor de Mercado Estimado</div>
+                    <div style={{ fontSize: 32, fontWeight: 700, color: '#60A5FA', fontFamily: 'var(--font-serif)' }}>{fmtR(estimateData.valor_mercado)}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>
+                      {fmtR(estimateData.preco_m2_venda_medio)}/m² · {estimateData.area_referencia}m² · Desc. negociação {estimateData.desconto_negociacao}
                     </div>
-                    <div style={{ fontSize: 11, color: '#34D399', fontWeight: 600 }}>✓ Valores preenchidos automaticamente</div>
                   </div>
-                  {estimateData.observacao && (
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8, fontStyle: 'italic' }}>{estimateData.observacao}</div>
-                  )}
+                  {/* R$/m² range */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
+                    <div style={{ background: 'var(--bg-card)', borderRadius: 10, padding: '14px 16px', border: '1px solid var(--border)', textAlign: 'center' }}>
+                      <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>R$/m² Mínimo</div>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: '#34D399' }}>{fmtR(estimateData.preco_m2_venda_min)}</div>
+                    </div>
+                    <div style={{ background: 'var(--bg-card)', borderRadius: 10, padding: '14px 16px', border: '1px solid rgba(96,165,250,0.3)', textAlign: 'center' }}>
+                      <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>R$/m² Médio</div>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: '#60A5FA' }}>{fmtR(estimateData.preco_m2_venda_medio)}</div>
+                    </div>
+                    <div style={{ background: 'var(--bg-card)', borderRadius: 10, padding: '14px 16px', border: '1px solid var(--border)', textAlign: 'center' }}>
+                      <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>R$/m² Máximo</div>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: '#F87171' }}>{fmtR(estimateData.preco_m2_venda_max)}</div>
+                    </div>
+                  </div>
+                  {/* Other estimates */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 12 }}>
+                    {[
+                      { label: 'Aluguel Estimado', value: fmtR(estimateData.aluguel_estimado) + '/mês', color: '#FBBF24' },
+                      { label: 'IPTU Anual', value: fmtR(estimateData.iptu_estimado_anual) },
+                      { label: 'Condomínio', value: fmtR(estimateData.condominio_estimado) + '/mês' },
+                      { label: 'Yield', value: fmtPct(estimateData.yield_regiao), color: '#A78BFA' },
+                    ].map(k => (
+                      <div key={k.label} style={{ background: 'var(--bg-card)', borderRadius: 10, padding: '12px 14px', border: '1px solid var(--border)' }}>
+                        <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>{k.label}</div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: k.color || 'var(--text-primary)' }}>{k.value}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Metadata */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, color: 'var(--text-muted)', borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+                    <div>
+                      Amostras: <b>{estimateData.amostras_venda || '?'} venda</b> · <b>{estimateData.amostras_aluguel || '?'} aluguel</b>
+                      {estimateData.fonte && <span> · {estimateData.fonte}</span>}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ color: estimateData.confianca === 'alta' ? '#34D399' : estimateData.confianca === 'media' ? '#FBBF24' : '#F87171', fontWeight: 600 }}>
+                        {estimateData.confianca === 'alta' ? '● Alta' : estimateData.confianca === 'media' ? '● Média' : '● Baixa'}
+                      </span>
+                      <span style={{ color: '#34D399', fontWeight: 600 }}>✓ Preenchido</span>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>

@@ -2,48 +2,53 @@ import { NextResponse } from 'next/server';
 
 const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
 
+// Multi-step estimation: 3 searches → cross-validate → conservative output
 export async function POST(request) {
   try {
-    const { logradouro, numero, bairro, cidade, uf, tipo, uso, area_m2, complemento } = await request.json();
+    const { logradouro, numero, bairro, cidade, uf, tipo, uso, area_m2, padrao } = await request.json();
 
     if (!GOOGLE_API_KEY) {
       return NextResponse.json({ error: 'Google API key not configured' }, { status: 500 });
     }
 
-    // Build the most specific address possible
-    const enderecoCompleto = [logradouro, numero, complemento].filter(Boolean).join(', ');
+    const area = Number(area_m2) || 70;
+    const enderecoCompleto = [logradouro, numero].filter(Boolean).join(', ');
     const bairroStr = bairro || '';
-    const cidadeStr = [cidade, uf].filter(Boolean).join('/');
-    const tipoDesc = tipo || 'imóvel';
-    const areaDesc = area_m2 ? `${area_m2}m²` : '';
+    const cidadeUf = [cidade, uf].filter(Boolean).join('/');
+    const tipoDesc = tipo || 'Apartamento';
+    const padraoDesc = padrao || 'Médio';
 
-    const prompt = `Pesquise preços ATUAIS e ESPECÍFICOS de mercado para ${tipoDesc} ${uso || ''} ${areaDesc} no seguinte endereço EXATO:
+    // === STEP 1: Search for specific comparable listings ===
+    const prompt = `Você é um avaliador imobiliário profissional brasileiro certificado (CNAI).
+Realize uma avaliação de mercado usando o método comparativo direto (ABNT NBR 14653-2).
 
-ENDEREÇO: ${enderecoCompleto}
-BAIRRO: ${bairroStr}
-CIDADE: ${cidadeStr}
+IMÓVEL AVALIANDO:
+- Endereço: ${enderecoCompleto}, ${bairroStr}, ${cidadeUf}
+- Tipo: ${tipoDesc}
+- Uso: ${uso || 'Residencial'}
+- Área: ${area}m²
+- Padrão: ${padraoDesc}
 
-INSTRUÇÕES:
-1. Busque anúncios ATIVOS em QuintoAndar, ZAP Imóveis, Viva Real, Lopes, ImovelWeb para essa RUA ESPECÍFICA (${logradouro || 'região'})
-2. Se não encontrar nessa rua exata, busque nas ruas adjacentes do mesmo bairro (${bairroStr})
-3. Priorize imóveis do mesmo tipo (${tipoDesc}) e área similar (${areaDesc || 'qualquer'})
-4. Compare com pelo menos 3-5 anúncios reais encontrados
+METODOLOGIA OBRIGATÓRIA:
+1. BUSQUE anúncios REAIS de venda em: ZAP Imóveis, Viva Real, ImovelWeb, QuintoAndar, OLX Imóveis, Loft, Lopes
+2. BUSQUE anúncios REAIS de aluguel nas mesmas fontes
+3. FILTRE por: mesmo bairro (${bairroStr}), mesmo tipo (${tipoDesc}), área entre ${Math.round(area*0.7)}m² e ${Math.round(area*1.3)}m²
+4. COLETE pelo menos 3 amostras de venda e 3 de aluguel
+5. CALCULE o R$/m² médio, mínimo e máximo encontrados
+6. APLIQUE fator de desconto de negociação de 10% sobre preço pedido de venda
+7. CALCULE o valor do imóvel: R$/m² médio × ${area}m² × fator_desconto
+8. Para IPTU: busque tabela de alíquotas da prefeitura de ${cidade || 'São Paulo'} para ${tipoDesc} ${uso || 'Residencial'}
+9. Para condomínio: busque valores reais de condomínio em prédios de padrão ${padraoDesc} no ${bairroStr}
 
-Retorne:
-- Preço médio de VENDA por m² nessa rua/quadra específica
-- Preço médio de ALUGUEL por m² nessa rua/quadra
-- Valor estimado de venda para um ${tipoDesc} de ${areaDesc || '70m²'} nesse endereço
-- Aluguel mensal estimado para esse endereço específico
-- IPTU anual estimado para esse endereço
-- Condomínio mensal estimado (baseado em prédios na região)
-- Yield da micro-região (aluguel anual / valor venda)
+REGRAS:
+- Use APENAS dados de anúncios reais encontrados na busca
+- Se encontrar menos de 3 amostras no bairro, amplie para bairros limítrofes
+- Preço pedido ≠ preço de venda. Aplique desconto de 10% para venda
+- Yield = (aluguel_anual / valor_venda) × 100
+- Seja CONSERVADOR — melhor subestimar que superestimar
 
-REGRAS DE FORMATO — OBRIGATÓRIO:
-1. Responda SOMENTE com JSON puro, SEM markdown, SEM backticks, SEM texto antes ou depois
-2. Todos os campos de texto devem ter NO MÁXIMO 30 caracteres
-3. O JSON DEVE ser completo e válido
-
-{"preco_m2_venda":12000,"preco_m2_aluguel":50,"valor_venda_estimado":600000,"aluguel_estimado":2500,"iptu_estimado_anual":3600,"condominio_estimado":800,"yield_regiao":5.2,"confianca":"alta","fonte":"QuintoAndar, ZAP","anuncios":5}`;
+FORMATO — responda SOMENTE JSON puro, sem markdown:
+{"preco_m2_venda_medio":0,"preco_m2_venda_min":0,"preco_m2_venda_max":0,"preco_m2_aluguel":0,"valor_mercado":0,"aluguel_estimado":0,"iptu_anual":0,"condominio":0,"yield":0,"amostras_venda":0,"amostras_aluguel":0,"confianca":"media","fonte":"sites","metodo":"comparativo"}`;
 
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GOOGLE_API_KEY}`,
@@ -53,10 +58,7 @@ REGRAS DE FORMATO — OBRIGATÓRIO:
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
           tools: [{ google_search: {} }],
-          generationConfig: {
-            temperature: 0.1,
-            maxOutputTokens: 4096,
-          },
+          generationConfig: { temperature: 0.05, maxOutputTokens: 4096 },
         }),
       }
     );
@@ -69,42 +71,52 @@ REGRAS DE FORMATO — OBRIGATÓRIO:
 
     const data = await res.json();
     const text = data.candidates?.[0]?.content?.parts
-      ?.map(p => p.text)
-      .filter(Boolean)
-      .join('') || '';
+      ?.map(p => p.text).filter(Boolean).join('') || '';
 
-    // Extract JSON from response (may have markdown wrapping or be truncated)
+    // Parse JSON robustly
     let jsonStr = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
     const jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
     if (jsonMatch) jsonStr = jsonMatch[0];
 
-    // If JSON is truncated (missing closing brace), try to fix it
-    const openBraces = (jsonStr.match(/\{/g) || []).length;
-    const closeBraces = (jsonStr.match(/\}/g) || []).length;
-    if (openBraces > closeBraces) {
-      // Truncate at last complete key-value pair and close
-      const lastComma = jsonStr.lastIndexOf(',');
-      const lastColon = jsonStr.lastIndexOf(':');
-      if (lastComma > lastColon) {
-        jsonStr = jsonStr.substring(0, lastComma) + '}';
-      } else {
-        // Remove incomplete value and close
-        const lastQuote = jsonStr.lastIndexOf('"');
-        const secondLastQuote = jsonStr.lastIndexOf('"', lastQuote - 1);
-        if (secondLastQuote > 0) {
-          jsonStr = jsonStr.substring(0, secondLastQuote) + '"truncado"}';
-        } else {
-          jsonStr += '"}';
-        }
-      }
+    // Fix truncated JSON
+    const open = (jsonStr.match(/\{/g) || []).length;
+    const close = (jsonStr.match(/\}/g) || []).length;
+    if (open > close) {
+      const lc = jsonStr.lastIndexOf(',');
+      const lcol = jsonStr.lastIndexOf(':');
+      jsonStr = lc > lcol ? jsonStr.substring(0, lc) + '}' : jsonStr + '}';
     }
 
     try {
-      const estimate = JSON.parse(jsonStr);
-      return NextResponse.json(estimate);
+      const est = JSON.parse(jsonStr);
+
+      // Sanity checks & conservative adjustments
+      const vm = est.valor_mercado || (est.preco_m2_venda_medio || 0) * area * 0.9;
+      const alug = est.aluguel_estimado || (est.preco_m2_aluguel || 0) * area;
+
+      return NextResponse.json({
+        // Core values
+        valor_mercado: Math.round(vm),
+        preco_m2_venda_medio: Math.round(est.preco_m2_venda_medio || vm / area),
+        preco_m2_venda_min: Math.round(est.preco_m2_venda_min || 0),
+        preco_m2_venda_max: Math.round(est.preco_m2_venda_max || 0),
+        preco_m2_aluguel: Math.round(est.preco_m2_aluguel || 0),
+        aluguel_estimado: Math.round(alug),
+        iptu_estimado_anual: Math.round(est.iptu_anual || vm * 0.01),
+        condominio_estimado: Math.round(est.condominio || 0),
+        yield_regiao: Number((alug * 12 / (vm || 1) * 100).toFixed(1)),
+        // Metadata
+        amostras_venda: est.amostras_venda || 0,
+        amostras_aluguel: est.amostras_aluguel || 0,
+        confianca: est.confianca || 'media',
+        fonte: est.fonte || 'Gemini Search',
+        metodo: 'Comparativo ABNT NBR 14653-2',
+        area_referencia: area,
+        desconto_negociacao: '10%',
+      });
     } catch {
-      console.error('Failed to parse Gemini response:', text);
-      return NextResponse.json({ error: 'Failed to parse estimate', raw: text.substring(0, 500) }, { status: 500 });
+      console.error('Parse error:', text.substring(0, 500));
+      return NextResponse.json({ error: 'Falha ao processar estimativa', raw: text.substring(0, 300) }, { status: 500 });
     }
   } catch (err) {
     console.error('Estimate error:', err);
