@@ -17,6 +17,7 @@ const supabase = (supabaseUrl && supabaseAnonKey)
 const TIPOS = ['Apartamento', 'Casa', 'Studio', 'Laje Corporativa', 'Galpão', 'Terreno', 'Varejo'];
 const USOS = ['Residencial', 'Comercial', 'Industrial', 'Misto'];
 const PADROES = ['Econômico', 'Médio', 'Alto', 'Luxo'];
+const ESTAGIOS = ['Pronto', 'Em Construção', 'Na Planta', 'Em Reforma'];
 const STATUS_LIST = ['Alugado', 'Vago', 'Uso Próprio', 'Em Reforma', 'À Venda'];
 const TITULARES = ['PF', 'Holding', 'SPE', 'FII'];
 const INDICES = ['IGPM', 'IPCA', 'INPC'];
@@ -210,7 +211,7 @@ const S = {
 // ============================================================
 const EMPTY_IMOVEL = {
   cep: '', logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', uf: 'SP', matricula: '',
-  tipo: 'Apartamento', uso: 'Residencial', area_m2: '', quartos: '', padrao: 'Médio', nome: '',
+  tipo: 'Apartamento', uso: 'Residencial', estagio: 'Pronto', area_m2: '', quartos: '', padrao: 'Médio', nome: '',
   titular: 'PF', titular_nome: '', cnpj: '', custo_aquisicao: '', data_aquisicao: '', valor_mercado: '', divida: '', parcela_mensal: '',
   status: 'Vago', inquilino: '', inquilino_contato: '', aluguel: '', contrato_inicio: '', contrato_fim: '',
   indice_reajuste: 'IGPM', data_proximo_reajuste: '', garantia: '', imobiliaria: '', taxa_adm: '', inadimplente: false,
@@ -253,17 +254,76 @@ function Field({ label, value, onChange, type = 'text', options, placeholder, su
 // ============================================================
 // TAB 1: DASHBOARD
 // ============================================================
-function DashboardTab({ imoveis }) {
+function DashboardTab({ imoveis, onUpdateImovel }) {
+  const [estimating, setEstimating] = useState({});
+  const [estimates, setEstimates] = useState({});
+  const estimatedRef = useRef(new Set());
+
+  // Auto-fetch market values for properties missing valor_mercado
+  useEffect(() => {
+    if (!imoveis.length) return;
+    const missing = imoveis.filter(im =>
+      !im.valor_mercado && im.logradouro && im.cidade && !estimatedRef.current.has(im.id)
+    );
+    if (!missing.length) return;
+
+    missing.forEach(async (im) => {
+      estimatedRef.current.add(im.id);
+      setEstimating(prev => ({ ...prev, [im.id]: true }));
+      try {
+        const res = await fetch('/api/real-estate-estimate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            logradouro: im.logradouro, numero: im.numero, complemento: im.complemento,
+            bairro: im.bairro, cidade: im.cidade, uf: im.uf,
+            tipo: im.tipo, uso: im.uso, area_m2: Number(im.area_m2) || 70,
+          }),
+        });
+        const data = await res.json();
+        if (!data.error && data.valor_venda_estimado) {
+          setEstimates(prev => ({ ...prev, [im.id]: data }));
+          // Save to database so we don't re-fetch
+          onUpdateImovel(im.id, {
+            valor_mercado: data.valor_venda_estimado,
+            aluguel: im.aluguel || data.aluguel_estimado || 0,
+            iptu_anual: im.iptu_anual || data.iptu_estimado_anual || 0,
+            condominio_mensal: im.condominio_mensal || data.condominio_estimado || 0,
+          });
+        }
+      } catch (err) {
+        console.error('Auto-estimate error for', im.id, err);
+      }
+      setEstimating(prev => ({ ...prev, [im.id]: false }));
+    });
+  }, [imoveis, onUpdateImovel]);
+
+  // Merge estimates into imoveis for display
+  const imoveisWithEstimates = useMemo(() => {
+    return imoveis.map(im => {
+      const est = estimates[im.id];
+      if (!est) return im;
+      return {
+        ...im,
+        valor_mercado: im.valor_mercado || est.valor_venda_estimado,
+        aluguel: im.aluguel || est.aluguel_estimado,
+        _estimated: true,
+      };
+    });
+  }, [imoveis, estimates]);
+
   const totais = useMemo(() => {
-    const alugados = imoveis.filter(i => i.status === 'Alugado');
+    const data = imoveisWithEstimates;
+    const alugados = data.filter(i => i.status === 'Alugado');
     const receitaMensal = alugados.reduce((s, i) => s + (i.aluguel || 0), 0);
-    const noiAnual = imoveis.reduce((s, i) => s + calcNOI(i), 0);
-    const patrimonio = imoveis.reduce((s, i) => s + (i.valor_mercado || i.custo_aquisicao || 0), 0);
+    const noiAnual = data.reduce((s, i) => s + calcNOI(i), 0);
+    const patrimonio = data.reduce((s, i) => s + (i.valor_mercado || i.custo_aquisicao || 0), 0);
     const yieldPort = patrimonio > 0 ? (noiAnual / patrimonio) * 100 : 0;
-    const vagos = imoveis.filter(i => i.status === 'Vago').length;
-    const vacancia = imoveis.length > 0 ? (vagos / imoveis.length) * 100 : 0;
-    return { receitaMensal, noiAnual, patrimonio, yieldPort, vacancia, alugados: alugados.length, vagos };
-  }, [imoveis]);
+    const vagos = data.filter(i => i.status === 'Vago').length;
+    const vacancia = data.length > 0 ? (vagos / data.length) * 100 : 0;
+    const estimatingCount = Object.values(estimating).filter(Boolean).length;
+    return { receitaMensal, noiAnual, patrimonio, yieldPort, vacancia, alugados: alugados.length, vagos, estimatingCount };
+  }, [imoveisWithEstimates, estimating]);
 
   const alertas = useMemo(() => {
     const list = [];
@@ -287,13 +347,14 @@ function DashboardTab({ imoveis }) {
         {[
           { label: 'Receita Mensal', value: fmtR(totais.receitaMensal), color: '#34D399', accent: true },
           { label: 'NOI Anual', value: fmtR(totais.noiAnual), color: '#60A5FA' },
-          { label: 'Patrimônio', value: fmtR(totais.patrimonio) },
+          { label: 'Patrimônio', value: fmtR(totais.patrimonio), sub: totais.estimatingCount > 0 ? `⏳ Estimando ${totais.estimatingCount}...` : null },
           { label: 'Yield Portfólio', value: fmtPct(totais.yieldPort), color: totais.yieldPort >= 6 ? '#34D399' : '#FBBF24' },
           { label: 'Vacância', value: fmtPct(totais.vacancia), color: totais.vacancia > 10 ? '#F87171' : '#34D399' },
         ].map(k => (
           <div key={k.label} style={S.kpiCard(k.accent)}>
             <div style={S.kpiLabel}>{Icons.dollar} {k.label}</div>
             <div style={S.kpiValue(k.color)}>{k.value}</div>
+            {k.sub && <div style={S.kpiSub}>{k.sub}</div>}
           </div>
         ))}
       </div>
@@ -337,17 +398,18 @@ function DashboardTab({ imoveis }) {
             <table style={S.table}>
               <thead>
                 <tr>
-                  {['Ativo', 'Tipo', 'Aluguel', 'NOI Anual', 'Yield', 'LTV', 'Status', 'Alertas'].map(h => (
+                  {['Ativo', 'Tipo', 'Valor Mercado', 'Aluguel', 'Yield', 'LTV', 'Status', 'Alertas'].map(h => (
                     <th key={h} style={S.th}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {imoveis.map(im => {
+                {imoveisWithEstimates.map(im => {
                   const noi = calcNOI(im);
                   const y = calcYield(im);
                   const ltv = calcLTV(im);
                   const df = diasFimContrato(im);
+                  const isEstimating = estimating[im.id];
                   const alerts = [];
                   if (im.inadimplente) alerts.push('Inadimpl.');
                   if (ltv > 70) alerts.push('LTV>' + Math.round(ltv) + '%');
@@ -359,8 +421,17 @@ function DashboardTab({ imoveis }) {
                         <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{im.cidade}/{im.uf}</div>
                       </td>
                       <td style={S.td}>{im.tipo}</td>
+                      <td style={S.td}>
+                        {isEstimating ? (
+                          <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>⏳ Estimando...</span>
+                        ) : (
+                          <div>
+                            <span style={{ fontWeight: 600 }}>{fmtR(im.valor_mercado)}</span>
+                            {im._estimated && <span style={{ ...S.badge('#60A5FA'), marginLeft: 6, fontSize: 9, padding: '2px 6px' }}>IA</span>}
+                          </div>
+                        )}
+                      </td>
                       <td style={S.td}>{fmtR(im.aluguel)}</td>
-                      <td style={{ ...S.td, color: noi >= 0 ? '#34D399' : '#F87171' }}>{fmtR(noi)}</td>
                       <td style={{ ...S.td, color: y >= 6 ? '#34D399' : '#FBBF24' }}>{fmtPct(y)}</td>
                       <td style={{ ...S.td, color: ltv > 70 ? '#F87171' : 'var(--text-secondary)' }}>{fmtPct(ltv)}</td>
                       <td style={S.td}><span style={S.badge(STATUS_COLORS[im.status] || '#60A5FA')}>{im.status}</span></td>
@@ -627,12 +698,14 @@ function CadastroTab({ imoveis, onSave, onEdit, onDelete, user }) {
 
           {/* Characteristics */}
           <div style={S.formSection}>Características</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr 1fr', gap: 16, marginBottom: 28 }}>
-            <Field label="Nome / Apelido" value={form.nome} onChange={v => upd('nome', v)} placeholder="Ex: Apto Faria Lima" style={{ gridColumn: 'span 2' }} />
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1fr 1fr', gap: 16, marginBottom: 28 }}>
+            <Field label="Nome / Apelido" value={form.nome} onChange={v => upd('nome', v)} placeholder="Ex: Apto Faria Lima" />
             <Field label="Tipo" value={form.tipo} onChange={v => upd('tipo', v)} options={TIPOS} />
             <Field label="Uso" value={form.uso} onChange={v => upd('uso', v)} options={USOS} />
+            <Field label="Estágio" value={form.estagio} onChange={v => upd('estagio', v)} options={ESTAGIOS} />
             <Field label="Área m²" value={form.area_m2} onChange={v => upd('area_m2', v)} type="number" />
             <Field label="Quartos" value={form.quartos} onChange={v => upd('quartos', v)} type="number" />
+            <Field label="Padrão" value={form.padrao} onChange={v => upd('padrao', v)} options={PADROES} />
           </div>
 
           {/* Ownership */}
@@ -2771,7 +2844,7 @@ export default function RealEstatePage() {
           <div style={{ textAlign: 'center', padding: 80, color: 'var(--text-muted)' }}>Carregando dados...</div>
         ) : (
           <>
-            {tab === 'dashboard' && <DashboardTab imoveis={imoveis} />}
+            {tab === 'dashboard' && <DashboardTab imoveis={imoveis} onUpdateImovel={updateImovel} />}
             {tab === 'portfolio' && <PortfolioWrapper imoveis={imoveis} onSave={saveImovel} onEdit={editImovel} onDelete={deleteImovel} user={user} ddItems={ddItems} onSaveDD={saveDD} onUpdateDD={updateDD} />}
             {tab === 'operacional' && <OperacionalTab imoveis={imoveis} recibos={recibos} ocorrencias={ocorrencias} manutencoes={manutencoes} onSaveRecibo={saveRecibo} onSaveOcorrencia={saveOcorrencia} onSaveManutencao={saveManutencao} onUpdateImovel={updateImovel} />}
             {tab === 'financeiro' && <FinanceiroWrapper imoveis={imoveis} dividas={dividas} manutencoes={manutencoes} />}
