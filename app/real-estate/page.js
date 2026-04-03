@@ -216,6 +216,8 @@ const EMPTY_IMOVEL = {
   status: 'Vago', inquilino: '', inquilino_contato: '', aluguel: '', contrato_inicio: '', contrato_fim: '',
   indice_reajuste: 'IGPM', data_proximo_reajuste: '', garantia: '', imobiliaria: '', taxa_adm: '', inadimplente: false,
   iptu_anual: '', condominio_mensal: '', seguro_anual: '', capex_pendente: '', observacoes: '',
+  data_entrega: '', pct_obra: '', valor_contrato: '', entrada_paga: '', parcela_obra: '', indice_correcao: 'INCC-DI', construtora: '',
+  banco_financiamento: '', taxa_financiamento: '', prazo_financiamento: '', sistema_amortizacao: 'SAC', valor_financiado: '',
 };
 
 // ============================================================
@@ -375,6 +377,34 @@ function DashboardTab({ imoveis, onUpdateImovel }) {
         ))}
       </div>
 
+      {/* Advanced KPIs */}
+      <div style={{ display: 'flex', gap: 16, marginBottom: 28 }}>
+        {(() => {
+          const data = imoveisWithEstimates;
+          const aluguelAnualTotal = data.reduce((s, i) => s + (i.status === 'Alugado' ? (Number(i.aluguel) || 0) * 12 : 0), 0);
+          const custoTotal = data.reduce((s, i) => s + (Number(i.custo_aquisicao) || 0), 0);
+          const dividaTotal = data.reduce((s, i) => s + (Number(i.divida) || 0), 0);
+          const equityInvestido = custoTotal - dividaTotal;
+          const noiAnual = data.reduce((s, i) => s + calcNOI(i), 0);
+          const coc = equityInvestido > 0 ? (aluguelAnualTotal / equityInvestido) * 100 : 0;
+          const payback = noiAnual > 0 ? equityInvestido / noiAnual : 0;
+          const patrimonio = data.reduce((s, i) => s + (Number(i.valor_mercado) || Number(i.custo_aquisicao) || 0), 0);
+          const valorizacao = custoTotal > 0 ? ((patrimonio - custoTotal) / custoTotal) * 100 : 0;
+          const emConstrucao = data.filter(i => i.estagio === 'Em Construção' || i.estagio === 'Na Planta').length;
+          return [
+            { label: 'Cash-on-Cash', value: fmtPct(coc), color: coc >= 8 ? '#34D399' : '#FBBF24' },
+            { label: 'Payback', value: payback > 0 ? payback.toFixed(1) + ' anos' : '—', color: payback <= 10 ? '#34D399' : '#F87171' },
+            { label: 'Valorização', value: fmtPct(valorizacao), color: valorizacao >= 0 ? '#34D399' : '#F87171' },
+            { label: 'Em Construção', value: emConstrucao, color: emConstrucao > 0 ? '#60A5FA' : 'var(--text-primary)' },
+          ].map(s => (
+            <div key={s.label} style={{ background: 'var(--bg-card)', borderRadius: 12, border: '1px solid var(--border)', padding: '16px 24px', flex: 1, textAlign: 'center' }}>
+              <div style={{ fontSize: 24, fontWeight: 700, color: s.color, fontVariantNumeric: 'tabular-nums' }}>{s.value}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{s.label}</div>
+            </div>
+          ));
+        })()}
+      </div>
+
       {/* Alerts */}
       {alertas.length > 0 && (
         <div style={S.card}>
@@ -491,7 +521,7 @@ function CadastroTab({ imoveis, onSave, onEdit, onDelete, user }) {
       data[k] = v;
     });
     // Convert numeric fields (set 0 if empty)
-    ['area_m2', 'quartos', 'custo_aquisicao', 'valor_mercado', 'divida', 'parcela_mensal', 'aluguel', 'taxa_adm', 'iptu_anual', 'condominio_mensal', 'seguro_anual', 'capex_pendente'].forEach(k => {
+    ['area_m2', 'quartos', 'custo_aquisicao', 'valor_mercado', 'divida', 'parcela_mensal', 'aluguel', 'taxa_adm', 'iptu_anual', 'condominio_mensal', 'seguro_anual', 'capex_pendente', 'pct_obra', 'valor_contrato', 'entrada_paga', 'parcela_obra', 'valor_financiado', 'taxa_financiamento', 'prazo_financiamento'].forEach(k => {
       data[k] = data[k] == null || data[k] === '' ? 0 : Number(data[k]);
     });
     // Ensure required defaults
@@ -503,7 +533,7 @@ function CadastroTab({ imoveis, onSave, onEdit, onDelete, user }) {
     data.uf = data.uf || 'SP';
     data.inadimplente = data.inadimplente || false;
     // Date fields — convert empty to null
-    ['data_aquisicao', 'contrato_inicio', 'contrato_fim', 'data_proximo_reajuste'].forEach(k => {
+    ['data_aquisicao', 'contrato_inicio', 'contrato_fim', 'data_proximo_reajuste', 'data_entrega'].forEach(k => {
       if (!data[k]) data[k] = null;
     });
     try {
@@ -720,6 +750,38 @@ function CadastroTab({ imoveis, onSave, onEdit, onDelete, user }) {
             <Field label="Quartos" value={form.quartos} onChange={v => upd('quartos', v)} type="number" />
             <Field label="Padrão" value={form.padrao} onChange={v => upd('padrao', v)} options={PADROES} />
           </div>
+
+          {/* Construction (conditional) */}
+          {(form.estagio === 'Em Construção' || form.estagio === 'Na Planta') && (
+            <>
+              <div style={S.formSection}>Dados da Construção</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 16, marginBottom: 20 }}>
+                <Field label="Construtora" value={form.construtora} onChange={v => upd('construtora', v)} />
+                <Field label="Data Prevista Entrega" value={form.data_entrega} onChange={v => upd('data_entrega', v)} type="date" />
+                <Field label="% Obra Concluído" value={form.pct_obra} onChange={v => upd('pct_obra', v)} type="number" placeholder="0-100" />
+                <Field label="Valor do Contrato" value={form.valor_contrato} onChange={v => upd('valor_contrato', v)} type="number" placeholder="R$" />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 28 }}>
+                <Field label="Entrada Paga" value={form.entrada_paga} onChange={v => upd('entrada_paga', v)} type="number" placeholder="R$" />
+                <Field label="Parcela Mensal Obra" value={form.parcela_obra} onChange={v => upd('parcela_obra', v)} type="number" placeholder="R$" />
+                <Field label="Índice Correção" value={form.indice_correcao} onChange={v => upd('indice_correcao', v)} options={['INCC-DI', 'INCC-M', 'IPCA']} />
+              </div>
+            </>
+          )}
+
+          {/* Financing (conditional) */}
+          {(Number(form.divida) > 0 || Number(form.valor_financiado) > 0) && (
+            <>
+              <div style={S.formSection}>Financiamento</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr', gap: 16, marginBottom: 28 }}>
+                <Field label="Banco" value={form.banco_financiamento} onChange={v => upd('banco_financiamento', v)} />
+                <Field label="Valor Financiado" value={form.valor_financiado} onChange={v => upd('valor_financiado', v)} type="number" placeholder="R$" />
+                <Field label="Taxa a.a. %" value={form.taxa_financiamento} onChange={v => upd('taxa_financiamento', v)} type="number" suffix="%" />
+                <Field label="Prazo (meses)" value={form.prazo_financiamento} onChange={v => upd('prazo_financiamento', v)} type="number" />
+                <Field label="Sistema" value={form.sistema_amortizacao} onChange={v => upd('sistema_amortizacao', v)} options={['SAC', 'Price', 'Misto']} />
+              </div>
+            </>
+          )}
 
           {/* Ownership */}
           <div style={S.formSection}>Estrutura Patrimonial</div>
@@ -2577,7 +2639,346 @@ function PortfolioWrapper({ imoveis, onSave, onEdit, onDelete, user, ddItems, on
 }
 
 // ============================================================
-// WRAPPER: Financeiro (NOI + Dívida + CAPEX + Fluxo)
+// CONSTRUÇÃO & INCC TAB
+// ============================================================
+function ConstrucaoINCC({ imoveis }) {
+  const [inccData, setInccData] = useState(null);
+  const [inccError, setInccError] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/incc')
+      .then(r => r.json())
+      .then(data => { if (data.error) { setInccError(true); } else { setInccData(data); } })
+      .catch(() => setInccError(true));
+  }, []);
+
+  const emConstrucao = useMemo(() => imoveis.filter(im => im.estagio === 'Em Construção' || im.estagio === 'Na Planta'), [imoveis]);
+
+  return (
+    <div>
+      {/* INCC Atual */}
+      <div style={S.card}>
+        <div style={S.formSection}>INCC Atual</div>
+        {inccError || !inccData ? (
+          <div style={{ color: 'var(--text-muted)', padding: 20 }}>Sem dados INCC disponíveis.</div>
+        ) : (
+          <div style={S.kpiGrid}>
+            <div style={S.kpiCard(true)}>
+              <div style={S.kpiLabel}>INCC-DI Mês</div>
+              <div style={S.kpiValue('#60A5FA')}>{fmtPct(inccData.mensal_di, 2)}</div>
+              <div style={S.kpiSub}>{inccData.referencia || '—'}</div>
+            </div>
+            <div style={S.kpiCard()}>
+              <div style={S.kpiLabel}>Acumulado 12m</div>
+              <div style={S.kpiValue('#FBBF24')}>{fmtPct(inccData.acumulado_12m_di, 2)}</div>
+            </div>
+            <div style={S.kpiCard()}>
+              <div style={S.kpiLabel}>Fator 12m</div>
+              <div style={S.kpiValue()}>{inccData.fator_12m ? Number(inccData.fator_12m).toFixed(4) : '—'}</div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Imóveis em Construção */}
+      <div style={S.card}>
+        <div style={S.formSection}>Imóveis em Construção ({emConstrucao.length})</div>
+        {emConstrucao.length === 0 ? (
+          <div style={S.emptyState}>Nenhum imóvel em construção ou na planta.</div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={S.table}>
+              <thead>
+                <tr>
+                  {['Ativo', 'Construtora', 'Entrega', '% Obra', 'Valor Contrato', 'Entrada', 'Saldo', 'Saldo Corrigido INCC'].map(h => (
+                    <th key={h} style={S.th}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {emConstrucao.map(im => {
+                  const saldo = (Number(im.valor_contrato) || 0) - (Number(im.entrada_paga) || 0);
+                  const saldoCorrigido = inccData?.fator_12m ? saldo * Number(inccData.fator_12m) : null;
+                  const pct = Number(im.pct_obra) || 0;
+                  const diasEntrega = im.data_entrega ? Math.round((new Date(im.data_entrega) - new Date()) / (1000 * 60 * 60 * 24)) : null;
+                  return (
+                    <tr key={im.id} className="table-row-hover">
+                      <td style={S.td}>
+                        <div style={{ fontWeight: 600 }}>{im.nome || im.logradouro || '—'}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{im.estagio}</div>
+                      </td>
+                      <td style={S.td}>{im.construtora || '—'}</td>
+                      <td style={S.td}>
+                        <div>{fmtDate(im.data_entrega)}</div>
+                        {diasEntrega !== null && <div style={{ fontSize: 11, color: diasEntrega < 0 ? '#F87171' : diasEntrega < 180 ? '#FBBF24' : '#34D399' }}>{diasEntrega < 0 ? `${Math.abs(diasEntrega)}d atrasado` : `${diasEntrega}d restantes`}</div>}
+                      </td>
+                      <td style={S.td}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{ flex: 1, height: 6, background: 'var(--bg-surface)', borderRadius: 3, overflow: 'hidden' }}>
+                            <div style={{ width: `${Math.min(pct, 100)}%`, height: '100%', background: pct >= 80 ? '#34D399' : pct >= 50 ? '#FBBF24' : '#60A5FA', borderRadius: 3 }} />
+                          </div>
+                          <span style={{ fontSize: 12, fontWeight: 600, minWidth: 36 }}>{fmtPct(pct, 0)}</span>
+                        </div>
+                      </td>
+                      <td style={S.td}>{fmtR(im.valor_contrato)}</td>
+                      <td style={S.td}>{fmtR(im.entrada_paga)}</td>
+                      <td style={{ ...S.td, fontWeight: 600 }}>{fmtR(saldo)}</td>
+                      <td style={{ ...S.td, fontWeight: 600, color: '#FBBF24' }}>{saldoCorrigido !== null ? fmtR(saldoCorrigido) : '—'}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Evolução INCC 12m */}
+      {inccData?.historico_di && inccData.historico_di.length > 0 && (
+        <div style={S.card}>
+          <div style={S.formSection}>Evolução INCC-DI 12m</div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={S.table}>
+              <thead>
+                <tr>
+                  <th style={S.th}>Mês</th>
+                  <th style={S.th}>INCC-DI (%)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {inccData.historico_di.map((item, i) => (
+                  <tr key={i} className="table-row-hover">
+                    <td style={S.td}>{item.referencia || item.mes || `Mês ${i + 1}`}</td>
+                    <td style={{ ...S.td, fontWeight: 600, color: Number(item.valor) > 0.5 ? '#F87171' : '#34D399' }}>{fmtPct(item.valor, 2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// FINANCIAMENTO SIMULADOR TAB
+// ============================================================
+function FinanciamentoSimulador({ imoveis }) {
+  const [subtab, setSubtab] = useState('simulador');
+  const imoveisComFinanc = useMemo(() => imoveis.filter(im => Number(im.valor_financiado) > 0 || Number(im.divida) > 0), [imoveis]);
+  const [selectedImovel, setSelectedImovel] = useState('');
+  const [valorFinanciado, setValorFinanciado] = useState(500000);
+  const [taxaAnual, setTaxaAnual] = useState(10.5);
+  const [prazoMeses, setPrazoMeses] = useState(360);
+  const [sistema, setSistema] = useState('SAC');
+  const [renda, setRenda] = useState(20000);
+
+  // Sync from selected imovel
+  useEffect(() => {
+    if (!selectedImovel) return;
+    const im = imoveis.find(i => i.id === selectedImovel);
+    if (!im) return;
+    if (Number(im.valor_financiado) > 0) setValorFinanciado(Number(im.valor_financiado));
+    else if (Number(im.divida) > 0) setValorFinanciado(Number(im.divida));
+    if (Number(im.taxa_financiamento) > 0) setTaxaAnual(Number(im.taxa_financiamento));
+    if (Number(im.prazo_financiamento) > 0) setPrazoMeses(Number(im.prazo_financiamento));
+    if (im.sistema_amortizacao) setSistema(im.sistema_amortizacao);
+  }, [selectedImovel, imoveis]);
+
+  function calcAmortization(principal, taxaAn, prazo, sys) {
+    const taxaMensal = Math.pow(1 + taxaAn / 100, 1 / 12) - 1;
+    const rows = [];
+    let saldo = principal;
+    for (let m = 1; m <= Math.min(prazo, prazo); m++) {
+      const juros = saldo * taxaMensal;
+      let amort, prestacao;
+      if (sys === 'SAC') {
+        amort = principal / prazo;
+        prestacao = amort + juros;
+      } else { // Price
+        const pmt = principal * (taxaMensal * Math.pow(1 + taxaMensal, prazo)) / (Math.pow(1 + taxaMensal, prazo) - 1);
+        prestacao = pmt;
+        amort = pmt - juros;
+      }
+      saldo = Math.max(0, saldo - amort);
+      rows.push({ mes: m, prestacao, juros, amort, saldo });
+    }
+    return rows;
+  }
+
+  function calcSummary(rows) {
+    if (!rows.length) return { primeira: 0, ultima: 0, totalPago: 0, totalJuros: 0 };
+    return {
+      primeira: rows[0].prestacao,
+      ultima: rows[rows.length - 1].prestacao,
+      totalPago: rows.reduce((s, r) => s + r.prestacao, 0),
+      totalJuros: rows.reduce((s, r) => s + r.juros, 0),
+    };
+  }
+
+  const rowsSAC = useMemo(() => calcAmortization(valorFinanciado, taxaAnual, prazoMeses, 'SAC'), [valorFinanciado, taxaAnual, prazoMeses]);
+  const rowsPrice = useMemo(() => calcAmortization(valorFinanciado, taxaAnual, prazoMeses, 'Price'), [valorFinanciado, taxaAnual, prazoMeses]);
+  const rows = sistema === 'SAC' ? rowsSAC : rowsPrice;
+  const summary = useMemo(() => calcSummary(rows), [rows]);
+  const summarySAC = useMemo(() => calcSummary(rowsSAC), [rowsSAC]);
+  const summaryPrice = useMemo(() => calcSummary(rowsPrice), [rowsPrice]);
+
+  // Capacidade
+  const maxParcela = renda * 0.3;
+  const taxaMensalCap = Math.pow(1 + taxaAnual / 100, 1 / 12) - 1;
+  const maxFinanciavel = taxaMensalCap > 0 ? maxParcela * (Math.pow(1 + taxaMensalCap, prazoMeses) - 1) / (taxaMensalCap * Math.pow(1 + taxaMensalCap, prazoMeses)) : maxParcela * prazoMeses;
+
+  return (
+    <div>
+      <div style={S.subtabs}>
+        {[{ id: 'simulador', label: 'Simulador' }, { id: 'comparativo', label: 'Comparativo' }, { id: 'capacidade', label: 'Capacidade' }].map(s => (
+          <button key={s.id} style={S.subtab(subtab === s.id)} onClick={() => setSubtab(s.id)}>{s.label}</button>
+        ))}
+      </div>
+
+      {subtab === 'simulador' && (
+        <div>
+          <div style={S.card}>
+            <div style={S.formSection}>Parâmetros</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: 16, marginBottom: 20 }}>
+              <div>
+                <label style={S.label}>Imóvel (opcional)</label>
+                <select style={S.select} value={selectedImovel} onChange={e => setSelectedImovel(e.target.value)}>
+                  <option value="">Manual</option>
+                  {imoveisComFinanc.map(im => <option key={im.id} value={im.id}>{im.nome || im.logradouro || 'Imóvel'}</option>)}
+                </select>
+              </div>
+              <Field label="Valor Financiado" value={valorFinanciado} onChange={v => setValorFinanciado(Number(v) || 0)} type="number" />
+              <Field label="Taxa a.a. %" value={taxaAnual} onChange={v => setTaxaAnual(Number(v) || 0)} type="number" />
+              <Field label="Prazo (meses)" value={prazoMeses} onChange={v => setPrazoMeses(Number(v) || 1)} type="number" />
+              <Field label="Sistema" value={sistema} onChange={v => setSistema(v)} options={['SAC', 'Price']} />
+            </div>
+          </div>
+
+          {/* KPIs */}
+          <div style={S.kpiGrid}>
+            <div style={S.kpiCard(true)}>
+              <div style={S.kpiLabel}>Primeira Parcela</div>
+              <div style={S.kpiValue('#60A5FA')}>{fmtR(summary.primeira)}</div>
+            </div>
+            <div style={S.kpiCard()}>
+              <div style={S.kpiLabel}>Última Parcela</div>
+              <div style={S.kpiValue()}>{fmtR(summary.ultima)}</div>
+            </div>
+            <div style={S.kpiCard()}>
+              <div style={S.kpiLabel}>Total Pago</div>
+              <div style={S.kpiValue('#FBBF24')}>{fmtR(summary.totalPago)}</div>
+            </div>
+            <div style={S.kpiCard()}>
+              <div style={S.kpiLabel}>Total Juros</div>
+              <div style={S.kpiValue('#F87171')}>{fmtR(summary.totalJuros)}</div>
+            </div>
+          </div>
+
+          {/* First 12 months */}
+          <div style={S.card}>
+            <div style={S.formSection}>Primeiros 12 Meses</div>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={S.table}>
+                <thead>
+                  <tr>{['Mês', 'Prestação', 'Juros', 'Amortização', 'Saldo Devedor'].map(h => <th key={h} style={S.th}>{h}</th>)}</tr>
+                </thead>
+                <tbody>
+                  {rows.slice(0, 12).map(r => (
+                    <tr key={r.mes} className="table-row-hover">
+                      <td style={S.td}>{r.mes}</td>
+                      <td style={{ ...S.td, fontWeight: 600 }}>{fmtR(r.prestacao)}</td>
+                      <td style={{ ...S.td, color: '#F87171' }}>{fmtR(r.juros)}</td>
+                      <td style={{ ...S.td, color: '#34D399' }}>{fmtR(r.amort)}</td>
+                      <td style={S.td}>{fmtR(r.saldo)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {subtab === 'comparativo' && (
+        <div>
+          <div style={S.kpiGrid}>
+            {[
+              { label: 'Total Pago SAC', value: fmtR(summarySAC.totalPago), color: '#60A5FA' },
+              { label: 'Total Pago Price', value: fmtR(summaryPrice.totalPago), color: '#A78BFA' },
+              { label: 'Diferença (Price - SAC)', value: fmtR(summaryPrice.totalPago - summarySAC.totalPago), color: '#F87171' },
+              { label: 'Juros SAC', value: fmtR(summarySAC.totalJuros), color: '#FBBF24' },
+              { label: 'Juros Price', value: fmtR(summaryPrice.totalJuros), color: '#F97316' },
+            ].map(k => (
+              <div key={k.label} style={S.kpiCard()}>
+                <div style={S.kpiLabel}>{k.label}</div>
+                <div style={S.kpiValue(k.color)}>{k.value}</div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+            {[{ title: 'SAC', data: rowsSAC }, { title: 'Price', data: rowsPrice }].map(col => (
+              <div key={col.title} style={S.card}>
+                <div style={S.formSection}>{col.title} — Primeiros 12 Meses</div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={S.table}>
+                    <thead>
+                      <tr>{['Mês', 'Prestação', 'Juros', 'Amort.', 'Saldo'].map(h => <th key={h} style={S.th}>{h}</th>)}</tr>
+                    </thead>
+                    <tbody>
+                      {col.data.slice(0, 12).map(r => (
+                        <tr key={r.mes} className="table-row-hover">
+                          <td style={S.td}>{r.mes}</td>
+                          <td style={{ ...S.td, fontWeight: 600 }}>{fmtR(r.prestacao)}</td>
+                          <td style={{ ...S.td, color: '#F87171' }}>{fmtR(r.juros)}</td>
+                          <td style={{ ...S.td, color: '#34D399' }}>{fmtR(r.amort)}</td>
+                          <td style={S.td}>{fmtR(r.saldo)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {subtab === 'capacidade' && (
+        <div>
+          <div style={S.card}>
+            <div style={S.formSection}>Capacidade de Financiamento</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 24 }}>
+              <Field label="Renda Mensal" value={renda} onChange={v => setRenda(Number(v) || 0)} type="number" />
+              <Field label="Taxa a.a. %" value={taxaAnual} onChange={v => setTaxaAnual(Number(v) || 0)} type="number" />
+              <Field label="Prazo (meses)" value={prazoMeses} onChange={v => setPrazoMeses(Number(v) || 1)} type="number" />
+            </div>
+          </div>
+          <div style={S.kpiGrid}>
+            <div style={S.kpiCard(true)}>
+              <div style={S.kpiLabel}>Renda Mensal</div>
+              <div style={S.kpiValue()}>{fmtR(renda)}</div>
+            </div>
+            <div style={S.kpiCard(true)}>
+              <div style={S.kpiLabel}>Máx. Parcela (30%)</div>
+              <div style={S.kpiValue('#60A5FA')}>{fmtR(maxParcela)}</div>
+            </div>
+            <div style={S.kpiCard(true)}>
+              <div style={S.kpiLabel}>Máx. Financiável</div>
+              <div style={S.kpiValue('#34D399')}>{fmtR(maxFinanciavel)}</div>
+              <div style={S.kpiSub}>{prazoMeses} meses a {fmtPct(taxaAnual)} a.a.</div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// WRAPPER: Financeiro (NOI + Dívida + CAPEX + Construção + Financiamento)
 // ============================================================
 function FinanceiroWrapper({ imoveis, dividas, manutencoes }) {
   const [section, setSection] = useState('noi');
@@ -2588,6 +2989,8 @@ function FinanceiroWrapper({ imoveis, dividas, manutencoes }) {
           { id: 'noi', label: 'NOI & Fluxo' },
           { id: 'divida', label: 'Dívida' },
           { id: 'capex', label: 'CAPEX' },
+          { id: 'construcao', label: 'Construção & INCC' },
+          { id: 'financiamento', label: 'Financiamento' },
         ].map(s => (
           <button key={s.id} style={S.subtab(section === s.id)} onClick={() => setSection(s.id)}>{s.label}</button>
         ))}
@@ -2595,6 +2998,8 @@ function FinanceiroWrapper({ imoveis, dividas, manutencoes }) {
       {section === 'noi' && <MotorFinanceiroTab imoveis={imoveis} />}
       {section === 'divida' && <DebtScheduleTab imoveis={imoveis} dividas={dividas} />}
       {section === 'capex' && <CAPEXPlanningTab imoveis={imoveis} manutencoes={manutencoes} />}
+      {section === 'construcao' && <ConstrucaoINCC imoveis={imoveis} />}
+      {section === 'financiamento' && <FinanciamentoSimulador imoveis={imoveis} />}
     </div>
   );
 }
