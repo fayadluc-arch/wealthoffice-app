@@ -689,7 +689,8 @@ function CadastroTab({ imoveis, onSave, onEdit, onDelete, user }) {
                     <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: 6 }}>Valor de Mercado Estimado</div>
                     <div style={{ fontSize: 32, fontWeight: 700, color: '#60A5FA', fontFamily: 'var(--font-serif)' }}>{fmtR(estimateData.valor_mercado)}</div>
                     <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>
-                      {fmtR(estimateData.preco_m2_venda_medio)}/m² · {estimateData.area_referencia}m² · Desc. negociação {estimateData.desconto_negociacao}
+                      {fmtR(estimateData.preco_m2_venda_medio)}/m² · {estimateData.area_referencia}m²
+                      {estimateData.predio && <span> · {estimateData.predio}</span>}
                     </div>
                   </div>
                   {/* R$/m² range */}
@@ -721,19 +722,96 @@ function CadastroTab({ imoveis, onSave, onEdit, onDelete, user }) {
                       </div>
                     ))}
                   </div>
-                  {/* Metadata */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, color: 'var(--text-muted)', borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+                  {/* Metadata + confidence */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, color: 'var(--text-muted)', borderTop: '1px solid var(--border)', paddingTop: 10, marginBottom: 12 }}>
                     <div>
-                      Amostras: <b>{estimateData.amostras_venda || '?'} venda</b> · <b>{estimateData.amostras_aluguel || '?'} aluguel</b>
-                      {estimateData.fonte && <span> · {estimateData.fonte}</span>}
+                      <b>{estimateData.amostras_venda || '?'}</b> comparáveis
+                      {estimateData.outliers_removidos > 0 && <span> ({estimateData.outliers_removidos} outliers removidos)</span>}
+                      {estimateData.metodo && <span> · {estimateData.metodo}</span>}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {estimateData.confianca_score != null && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <div style={{ width: 60, height: 6, borderRadius: 3, background: 'var(--border)', overflow: 'hidden' }}>
+                            <div style={{ width: `${Math.round((estimateData.confianca_score || 0) * 100)}%`, height: '100%', borderRadius: 3, background: estimateData.confianca === 'alta' ? '#34D399' : estimateData.confianca === 'media' ? '#FBBF24' : '#F87171' }} />
+                          </div>
+                          <span style={{ fontSize: 10 }}>{Math.round((estimateData.confianca_score || 0) * 100)}%</span>
+                        </div>
+                      )}
                       <span style={{ color: estimateData.confianca === 'alta' ? '#34D399' : estimateData.confianca === 'media' ? '#FBBF24' : '#F87171', fontWeight: 600 }}>
                         {estimateData.confianca === 'alta' ? '● Alta' : estimateData.confianca === 'media' ? '● Média' : '● Baixa'}
                       </span>
-                      <span style={{ color: '#34D399', fontWeight: 600 }}>✓ Preenchido</span>
                     </div>
                   </div>
+                  {/* Comparáveis encontrados */}
+                  {estimateData.comparaveis && estimateData.comparaveis.length > 0 && (
+                    <details style={{ marginBottom: 12 }}>
+                      <summary style={{ fontSize: 12, color: 'var(--accent)', cursor: 'pointer', fontWeight: 600, marginBottom: 8 }}>
+                        Ver {estimateData.comparaveis.length} comparáveis utilizados
+                      </summary>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 200, overflowY: 'auto' }}>
+                        {estimateData.comparaveis.map((c, i) => (
+                          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: 'var(--bg-card)', borderRadius: 8, border: '1px solid var(--border)', fontSize: 12 }}>
+                            <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+                              <span style={{ fontWeight: 600 }}>{fmtR(c.preco)}</span>
+                              <span style={{ color: 'var(--text-muted)' }}>{c.area_m2}m²</span>
+                              <span style={{ color: '#60A5FA', fontWeight: 600 }}>{fmtR(c.preco_m2)}/m²</span>
+                            </div>
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                              {c.bairro && <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{c.bairro}</span>}
+                              {c.url && c.url.startsWith('http') && (
+                                <a href={c.url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', textDecoration: 'none', fontSize: 11 }}>Ver anúncio</a>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )}
+                  {/* Empreendimento info */}
+                  {estimateData.empreendimento && estimateData.empreendimento.nome && (
+                    <div style={{ background: 'var(--bg-card)', borderRadius: 10, padding: '14px 16px', border: '1px solid var(--border)', marginBottom: 12 }}>
+                      <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>Empreendimento Identificado</div>
+                      <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>{estimateData.empreendimento.nome}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                        {[
+                          estimateData.empreendimento.construtora && `Construtora: ${estimateData.empreendimento.construtora}`,
+                          estimateData.empreendimento.ano_construcao && `Ano: ${estimateData.empreendimento.ano_construcao}`,
+                          estimateData.empreendimento.andares && `${estimateData.empreendimento.andares} andares`,
+                          estimateData.empreendimento.vagas && `${estimateData.empreendimento.vagas} vagas`,
+                        ].filter(Boolean).join(' · ')}
+                      </div>
+                    </div>
+                  )}
+                  {/* Analysis row: location + trend + FipeZap */}
+                  {(estimateData.analise_localizacao || estimateData.tendencia || estimateData.fipezap_delta_pct != null) && (
+                    <div style={{ display: 'grid', gridTemplateColumns: estimateData.analise_localizacao ? '2fr 1fr' : '1fr', gap: 12, marginBottom: 12 }}>
+                      {estimateData.analise_localizacao && (
+                        <div style={{ background: 'var(--bg-card)', borderRadius: 10, padding: '14px 16px', border: '1px solid var(--border)' }}>
+                          <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>Análise da Microrregião</div>
+                          <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{estimateData.analise_localizacao}</div>
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        {estimateData.tendencia && (
+                          <div style={{ background: 'var(--bg-card)', borderRadius: 10, padding: '12px 14px', border: '1px solid var(--border)', flex: 1 }}>
+                            <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Tendência</div>
+                            <div style={{ fontSize: 14, fontWeight: 600, color: estimateData.tendencia === 'alta' ? '#34D399' : estimateData.tendencia === 'baixa' ? '#F87171' : '#FBBF24' }}>
+                              {estimateData.tendencia === 'alta' ? 'Alta' : estimateData.tendencia === 'baixa' ? 'Baixa' : 'Estável'}
+                            </div>
+                          </div>
+                        )}
+                        {estimateData.fipezap_delta_pct != null && (
+                          <div style={{ background: 'var(--bg-card)', borderRadius: 10, padding: '12px 14px', border: '1px solid var(--border)', flex: 1 }}>
+                            <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>vs FipeZap</div>
+                            <div style={{ fontSize: 14, fontWeight: 600, color: Math.abs(estimateData.fipezap_delta_pct) < 10 ? '#34D399' : '#FBBF24' }}>
+                              {estimateData.fipezap_delta_pct > 0 ? '+' : ''}{estimateData.fipezap_delta_pct}%
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
