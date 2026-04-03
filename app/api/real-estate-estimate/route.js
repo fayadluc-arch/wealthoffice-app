@@ -38,23 +38,12 @@ Retorne:
 - Condomínio mensal estimado (baseado em prédios na região)
 - Yield da micro-região (aluguel anual / valor venda)
 
-IMPORTANTE: Responda SOMENTE em JSON válido, sem markdown, sem texto antes ou depois:
-{
-  "preco_m2_venda": 12000,
-  "preco_m2_aluguel": 50,
-  "valor_venda_estimado": 600000,
-  "aluguel_estimado": 2500,
-  "iptu_estimado_anual": 3600,
-  "condominio_estimado": 800,
-  "yield_regiao": 5.2,
-  "confianca": "alta",
-  "fonte": "QuintoAndar (3 anúncios), ZAP (2 anúncios)",
-  "endereco_referencia": "${enderecoCompleto}, ${bairroStr}",
-  "anuncios_encontrados": 5,
-  "observacao": "Baseado em 5 anúncios ativos na ${logradouro || 'região'} e ruas adjacentes"
-}
+REGRAS DE FORMATO — OBRIGATÓRIO:
+1. Responda SOMENTE com JSON puro, SEM markdown, SEM backticks, SEM texto antes ou depois
+2. Todos os campos de texto devem ter NO MÁXIMO 30 caracteres
+3. O JSON DEVE ser completo e válido
 
-O campo confianca: "alta" se encontrou anúncios nessa rua, "média" se usou ruas adjacentes, "baixa" se estimou pelo bairro.`;
+{"preco_m2_venda":12000,"preco_m2_aluguel":50,"valor_venda_estimado":600000,"aluguel_estimado":2500,"iptu_estimado_anual":3600,"condominio_estimado":800,"yield_regiao":5.2,"confianca":"alta","fonte":"QuintoAndar, ZAP","anuncios":5}`;
 
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GOOGLE_API_KEY}`,
