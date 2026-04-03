@@ -84,10 +84,31 @@ O campo confianca: "alta" se encontrou anúncios nessa rua, "média" se usou rua
       .filter(Boolean)
       .join('') || '';
 
-    // Extract JSON from response (may have markdown wrapping)
-    let jsonStr = text;
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    // Extract JSON from response (may have markdown wrapping or be truncated)
+    let jsonStr = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+    const jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
     if (jsonMatch) jsonStr = jsonMatch[0];
+
+    // If JSON is truncated (missing closing brace), try to fix it
+    const openBraces = (jsonStr.match(/\{/g) || []).length;
+    const closeBraces = (jsonStr.match(/\}/g) || []).length;
+    if (openBraces > closeBraces) {
+      // Truncate at last complete key-value pair and close
+      const lastComma = jsonStr.lastIndexOf(',');
+      const lastColon = jsonStr.lastIndexOf(':');
+      if (lastComma > lastColon) {
+        jsonStr = jsonStr.substring(0, lastComma) + '}';
+      } else {
+        // Remove incomplete value and close
+        const lastQuote = jsonStr.lastIndexOf('"');
+        const secondLastQuote = jsonStr.lastIndexOf('"', lastQuote - 1);
+        if (secondLastQuote > 0) {
+          jsonStr = jsonStr.substring(0, secondLastQuote) + '"truncado"}';
+        } else {
+          jsonStr += '"}';
+        }
+      }
+    }
 
     try {
       const estimate = JSON.parse(jsonStr);
