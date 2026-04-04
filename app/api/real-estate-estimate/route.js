@@ -173,115 +173,94 @@ function computeConfidence(nSamples, nPasses, cv) {
 }
 
 // ============================================================
-// PROMPTS — Specialist real estate appraiser
+// PROMPTS
 // ============================================================
 
+// Pass 1: Identificar o prédio + comparáveis de venda no prédio e entorno
 function buildPass1Prompt({ addr, numero, bairro, cidade, uf, tipo, area, padrao, padraoFilter }) {
-  const enderecoFull = [addr, numero].filter(Boolean).join(', ');
-  const areaMin = Math.round(area * 0.8);
-  const areaMax = Math.round(area * 1.2);
-
-  return `Você é um PERITO AVALIADOR IMOBILIÁRIO certificado (CNAI). Realize uma avaliação técnica pelo MÉTODO COMPARATIVO DIRETO DE DADOS DE MERCADO conforme NBR 14653-2.
-
-IMÓVEL AVALIANDO:
-- Endereço: ${enderecoFull}, ${bairro}, ${cidade}/${uf}
-- Tipo: ${tipo} | Padrão: ${padrao} | Área: ${area}m²
-
-ETAPA 1 — IDENTIFICAÇÃO DO EMPREENDIMENTO:
-Pesquise o endereço exato "${enderecoFull}, ${bairro}, ${cidade}" para identificar:
-- Nome do edifício, condomínio ou empreendimento
-- Ano de construção, construtora, número de andares/unidades
-- Infraestrutura (lazer, segurança, vagas)
-Buscas: "${enderecoFull} ${bairro} ${cidade} edifício condomínio", "${enderecoFull} ${cidade} prédio apartamento"
-
-ETAPA 2 — COLETA DE ELEMENTOS COMPARATIVOS (mínimo 5):
-Prioridade 1: Anúncios NO MESMO EDIFÍCIO/CONDOMÍNIO identificado na Etapa 1
-- Busque: "[nome do edifício] venda ${cidade}", "[nome do edifício] apartamento venda"
-Prioridade 2: Mesmo quarteirão ou ruas adjacentes, mesmo padrão
-- Busque: "${enderecoFull} ${bairro} venda ${tipo}", "${tipo} venda ${bairro} ${cidade} ${areaMin} a ${areaMax} m2"
-Prioridade 3: Mesmo bairro, padrão e tipologia
-- Busque: "${tipo} ${padrao} venda ${bairro} ${cidade} zapimoveis", "${tipo} venda ${bairro} ${cidade} vivareal"
-${padraoFilter}
-
-PORTAIS OBRIGATÓRIOS: zapimoveis.com.br, vivareal.com.br, imovelweb.com.br
-
-Para cada elemento comparativo, registre TODOS os dados disponíveis.
-
-RESPONDA EXCLUSIVAMENTE com este JSON (sem texto, sem markdown, sem backticks):
-{"empreendimento":{"nome":"","ano_construcao":"","construtora":"","andares":"","unidades":"","lazer":"","vagas":""},"listings":[{"preco":0,"area_m2":0,"preco_m2":0,"url":"","bairro":"","endereco":"","andar":"","vagas":0,"fonte":""}],"analise_localizacao":"breve análise da microrregião"}
-
-REGRAS TÉCNICAS:
-- Mínimo 5 elementos comparativos. Se não encontrar 5 no prédio, complete com entorno.
-- Área comparável: ${areaMin}m² a ${areaMax}m²
-- NÃO INVENTE dados. Registre APENAS anúncios reais encontrados nas buscas.
-- Se listings vazio, retorne []. Não fabrique comparativos.`;
+  const end = [addr, numero].filter(Boolean).join(', ');
+  const amin = Math.round(area * 0.8);
+  const amax = Math.round(area * 1.2);
+  return [
+    `Avaliação imobiliária — método comparativo NBR 14653-2.`,
+    ``,
+    `IMÓVEL: ${end}, ${bairro}, ${cidade}/${uf} | ${tipo} ${padrao} ${area}m²`,
+    ``,
+    `1. IDENTIFIQUE O EMPREENDIMENTO neste endereço:`,
+    `   Busque "${end} ${bairro} ${cidade} edifício condomínio" e "${end} ${cidade} prédio".`,
+    `   Registre: nome, construtora, ano, andares, vagas, lazer.`,
+    ``,
+    `2. BUSQUE ANÚNCIOS DE VENDA (mínimo 5):`,
+    `   Prioridade 1: mesmo prédio — "[nome do edifício] venda ${cidade}"`,
+    `   Prioridade 2: entorno — "${tipo} venda ${bairro} ${cidade} ${amin} a ${amax} m2"`,
+    `   Portais: zapimoveis.com.br, vivareal.com.br, imovelweb.com.br`,
+    `   ${padraoFilter}`,
+    ``,
+    `RESPONDA SOMENTE JSON (sem markdown):`,
+    `{"empreendimento":{"nome":"","ano_construcao":"","construtora":"","andares":"","unidades":"","lazer":"","vagas":""},"listings":[{"preco":0,"area_m2":0,"preco_m2":0,"url":"","bairro":"","endereco":"","fonte":""}],"analise_localizacao":""}`,
+    ``,
+    `NÃO invente dados. Se não achar, retorne listings: [].`,
+  ].join('\n');
 }
 
-function buildPass2Prompt({ addr, numero, bairro, cidade, uf, tipo, area, padrao, padraoFilter }) {
-  const areaMin = Math.round(area * 0.7);
-  const areaMax = Math.round(area * 1.3);
-
-  return `Você é um ANALISTA DE MERCADO IMOBILIÁRIO sênior. Realize uma pesquisa de mercado para ${tipo} em ${bairro}, ${cidade}/${uf}.
-
-OBJETIVO: Levantar o máximo de transações e anúncios comparáveis para validar uma avaliação.
-
-PESQUISA AMPLA — busque em múltiplas fontes:
-1. imovelweb.com.br: "${tipo} venda ${bairro} ${cidade}"
-2. loft.com.br: "${bairro} ${cidade} comprar ${tipo}"
-3. quintoandar.com.br: "${tipo} comprar ${bairro} ${cidade}"
-4. chavesnamao.com.br: "${tipo} venda ${bairro} ${cidade}"
-5. "${tipo} venda ${bairro} ${cidade} ${area}m2 preço"
-
-FILTROS:
-- Tipo: ${tipo} | Padrão: ${padrao}
-- Área útil: ${areaMin}m² a ${areaMax}m²
-- ${padraoFilter}
-- Somente anúncios com preço e área informados
-
-ANÁLISE REGIONAL — além dos anúncios, busque:
-- "Índice FipeZap ${bairro} ${cidade} ${tipo} preço m2 2025 2026"
-- "R$/m2 médio ${bairro} ${cidade} ${tipo} 2025 2026"
-- "mercado imobiliário ${bairro} ${cidade} tendência preços"
-
-RESPONDA EXCLUSIVAMENTE com este JSON:
-{"listings":[{"preco":0,"area_m2":0,"preco_m2":0,"url":"","bairro":"","endereco":"","fonte":""}],"indice_referencia":{"fipezap_m2":0,"fonte":"","periodo":""},"tendencia":"estável/alta/baixa","observacao":""}
-
-REGRAS:
-- Mínimo 3 elementos, idealmente 8+
-- Registre o portal de CADA anúncio no campo "fonte"
-- NÃO invente dados. Se não encontrar, retorne listings vazio: []
-- O campo indice_referencia pode ficar zerado se não encontrar índice FipeZap`;
+// Pass 2: Análise regional ampla + índice FipeZap
+function buildPass2Prompt({ bairro, cidade, uf, tipo, area, padrao, padraoFilter }) {
+  const amin = Math.round(area * 0.7);
+  const amax = Math.round(area * 1.3);
+  return [
+    `Pesquisa de mercado — ${tipo} ${padrao} em ${bairro}, ${cidade}/${uf}.`,
+    ``,
+    `BUSQUE ANÚNCIOS DE VENDA em portais alternativos:`,
+    `- imovelweb.com.br, loft.com.br, quintoandar.com.br, chavesnamao.com.br`,
+    `- "${tipo} venda ${bairro} ${cidade} ${area}m2"`,
+    `Filtro: ${amin}m² a ${amax}m² | ${padraoFilter}`,
+    ``,
+    `BUSQUE TAMBÉM o índice FipeZap para a região:`,
+    `- "Índice FipeZap ${bairro} ${cidade} ${tipo} preço m2 2025 2026"`,
+    `- "R$/m2 médio ${bairro} ${cidade} ${tipo}"`,
+    ``,
+    `RESPONDA SOMENTE JSON:`,
+    `{"listings":[{"preco":0,"area_m2":0,"preco_m2":0,"url":"","bairro":"","endereco":"","fonte":""}],"indice_referencia":{"fipezap_m2":0,"fonte":"","periodo":""},"tendencia":"estável/alta/baixa"}`,
+    ``,
+    `NÃO invente dados. Se não achar, retorne listings: [].`,
+  ].join('\n');
 }
 
-function buildPass3Prompt({ addr, numero, bairro, cidade, uf, tipo, area, padrao }) {
-  return `Você é um CONSULTOR IMOBILIÁRIO especialista em renda e custos operacionais. Pesquise dados REAIS e ATUAIS.
+// Pass 3: Custos operacionais (aluguel só se não for Uso Próprio)
+function buildPass3Prompt({ addr, numero, bairro, cidade, uf, tipo, area, padrao, status }) {
+  const end = [addr, numero].filter(Boolean).join(', ');
+  const isUsoProprio = status === 'Uso Próprio';
+  const aluMin = Math.round(area * 0.8);
+  const aluMax = Math.round(area * 1.2);
 
-IMÓVEL: ${tipo} ${padrao}, ~${area}m², ${bairro}, ${cidade}/${uf}
-${addr ? `Endereço: ${[addr, numero].filter(Boolean).join(', ')}` : ''}
+  const sections = [
+    `Custos operacionais — ${tipo} ${padrao} ~${area}m², ${bairro}, ${cidade}/${uf}.`,
+    addr ? `Endereço: ${end}` : '',
+    ``,
+  ];
 
-PESQUISE CADA ITEM COM BUSCAS ESPECÍFICAS:
+  if (!isUsoProprio) {
+    sections.push(
+      `1. ALUGUEL MENSAL (mínimo 3 anúncios):`,
+      `   - "${tipo} aluguel ${bairro} ${cidade} ${area}m2 zapimoveis"`,
+      `   - "${tipo} aluguel ${bairro} ${cidade} quintoandar"`,
+      `   - "${tipo} para alugar ${bairro} ${cidade} ${aluMin} a ${aluMax} m2"`,
+      ``,
+    );
+  }
 
-1. ALUGUEL MENSAL (busque pelo menos 3 anúncios):
-   - "${tipo} aluguel ${bairro} ${cidade} ${area}m2 zapimoveis"
-   - "${tipo} aluguel ${bairro} ${cidade} quintoandar"
-   - "${tipo} para alugar ${bairro} ${cidade} ${Math.round(area * 0.8)} a ${Math.round(area * 1.2)} m2"
+  sections.push(
+    `${isUsoProprio ? '1' : '2'}. CONDOMÍNIO: "condomínio médio ${bairro} ${cidade} ${tipo}"`,
+    `${isUsoProprio ? '2' : '3'}. IPTU: "IPTU ${cidade} ${tipo} ${area}m2 valor anual"`,
+    `${isUsoProprio ? '3' : '4'}. SEGURO: seguro residencial/comercial médio na região`,
+    ``,
+    `RESPONDA SOMENTE JSON:`,
+    `{"aluguel_med":0,"aluguel_min":0,"aluguel_max":0,"aluguel_amostras":0,"condo_med":0,"iptu_anual":0,"seguro_anual":0,"taxa_adm_pct":0,"yield_bruto_regiao":0,"fonte":""}`,
+    ``,
+    isUsoProprio ? `Imóvel de USO PRÓPRIO — coloque aluguel = 0. Busque apenas condomínio, IPTU e seguro.` : `NÃO invente valores. Se não encontrar, coloque 0.`,
+  );
 
-2. CONDOMÍNIO MENSAL:
-   - "condomínio médio ${bairro} ${cidade} ${tipo} ${padrao}"
-   - "valor condomínio ${tipo} ${bairro} ${cidade} 2025"
-
-3. IPTU ANUAL:
-   - "IPTU ${cidade} ${tipo} ${area}m2 valor anual 2025"
-   - "IPTU médio ${bairro} ${cidade}"
-
-4. CUSTOS OPERACIONAIS:
-   - Seguro residencial/comercial médio para ${tipo} na região
-   - Taxa de administração de locação padrão no bairro
-
-RESPONDA EXCLUSIVAMENTE com este JSON:
-{"aluguel_med":0,"aluguel_min":0,"aluguel_max":0,"aluguel_amostras":0,"condo_med":0,"iptu_anual":0,"seguro_anual":0,"taxa_adm_pct":0,"yield_bruto_regiao":0,"fonte":"portais consultados"}
-
-Se não encontrar um dado, coloque 0. NÃO invente valores.`;
+  return sections.filter(s => s !== undefined).join('\n');
 }
 
 // ============================================================
@@ -289,7 +268,7 @@ Se não encontrar um dado, coloque 0. NÃO invente valores.`;
 // ============================================================
 export async function POST(request) {
   try {
-    const { logradouro, numero, bairro, cidade, uf, tipo, uso, area_m2, padrao } = await request.json();
+    const { logradouro, numero, bairro, cidade, uf, tipo, uso, area_m2, padrao, status } = await request.json();
     if (!GOOGLE_API_KEY) return NextResponse.json({ error: 'Google API key not configured' }, { status: 500 });
 
     const area = Number(area_m2) || 70;
@@ -309,7 +288,7 @@ export async function POST(request) {
       padraoFilter = 'Padrão médio/standard. Exclua alto padrão e econômicos.';
     }
 
-    const params = { addr, numero, bairro: bairroS, cidade: cidadeS, uf: ufS, tipo: tipoS, area, padrao: padraoS, padraoFilter };
+    const params = { addr, numero, bairro: bairroS, cidade: cidadeS, uf: ufS, tipo: tipoS, area, padrao: padraoS, padraoFilter, status: status || '' };
 
     // Run Pass 1 (building-specific) + Pass 2 (regional) in parallel
     // Pass 3 (rental/costs) runs in parallel too

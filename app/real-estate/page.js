@@ -256,7 +256,7 @@ function Field({ label, value, onChange, type = 'text', options, placeholder, su
 // ============================================================
 // TAB 1: DASHBOARD
 // ============================================================
-function DashboardTab({ imoveis, autoEstimating }) {
+function DashboardTab({ imoveis, autoEstimating, onResetEstimates, isAdmin }) {
   const totais = useMemo(() => {
     const data = imoveis;
     const alugados = data.filter(i => i.status === 'Alugado');
@@ -291,14 +291,18 @@ function DashboardTab({ imoveis, autoEstimating }) {
         {[
           { label: 'Receita Mensal', value: fmtR(totais.receitaMensal), color: '#34D399', accent: true },
           { label: 'NOI Anual', value: fmtR(totais.noiAnual), color: '#60A5FA' },
-          { label: 'Patrimônio', value: fmtR(totais.patrimonio), sub: autoEstimating > 0 ? `Avaliando ${autoEstimating} imóveis...` : null },
+          { label: 'Patrimônio', value: fmtR(totais.patrimonio), sub: autoEstimating > 0 ? `Avaliando ${autoEstimating} imóveis...` : (isAdmin ? '_admin_reavalia' : null) },
           { label: 'Yield Portfólio', value: fmtPct(totais.yieldPort), color: totais.yieldPort >= 6 ? '#34D399' : '#FBBF24' },
           { label: 'Vacância', value: fmtPct(totais.vacancia), color: totais.vacancia > 10 ? '#F87171' : '#34D399' },
         ].map(k => (
           <div key={k.label} style={S.kpiCard(k.accent)}>
             <div style={S.kpiLabel}>{Icons.dollar} {k.label}</div>
             <div style={S.kpiValue(k.color)}>{k.value}</div>
-            {k.sub && <div style={S.kpiSub}>{k.sub}</div>}
+            {k.sub === '_admin_reavalia' ? (
+              <button style={{ fontSize: 10, color: '#60A5FA', background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginTop: 4 }} onClick={onResetEstimates}>
+                Reavaliar todos
+              </button>
+            ) : k.sub ? <div style={S.kpiSub}>{k.sub}</div> : null}
           </div>
         ))}
       </div>
@@ -403,8 +407,8 @@ function DashboardTab({ imoveis, autoEstimating }) {
                           </div>
                         )}
                       </td>
-                      <td style={S.td}>{fmtR(im.aluguel)}</td>
-                      <td style={{ ...S.td, color: y >= 6 ? '#34D399' : '#FBBF24' }}>{fmtPct(y)}</td>
+                      <td style={S.td}>{im.status === 'Uso Próprio' ? <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>—</span> : fmtR(im.aluguel)}</td>
+                      <td style={{ ...S.td, color: y >= 6 ? '#34D399' : '#FBBF24' }}>{im.status === 'Uso Próprio' ? <span style={{ color: 'var(--text-muted)' }}>—</span> : fmtPct(y)}</td>
                       <td style={{ ...S.td, color: ltv > 70 ? '#F87171' : 'var(--text-secondary)' }}>{fmtPct(ltv)}</td>
                       <td style={S.td}><span style={S.badge(STATUS_COLORS[im.status] || '#60A5FA')}>{im.status}</span></td>
                       <td style={S.td}>
@@ -475,6 +479,7 @@ function CadastroTab({ imoveis, onSave, onEdit, onDelete, user }) {
             bairro: form.bairro, cidade: form.cidade, uf: form.uf,
             tipo: form.tipo || 'Apartamento', uso: form.uso,
             area_m2: Number(form.area_m2) || 70, padrao: form.padrao || 'Médio',
+            status: form.status || '',
           }),
         });
         const data = await res.json();
@@ -856,36 +861,45 @@ function CadastroTab({ imoveis, onSave, onEdit, onDelete, user }) {
 
           {/* Operational */}
           <div style={S.formSection}>Operacional</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 16, marginBottom: 20 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: form.status === 'Uso Próprio' ? '1fr' : '1fr 1fr 1fr 1fr', gap: 16, marginBottom: 20 }}>
             <Field label="Status" value={form.status} onChange={v => upd('status', v)} options={STATUS_LIST} />
-            <Field label="Inquilino" value={form.inquilino} onChange={v => upd('inquilino', v)} />
-            <Field label="Contato Inquilino" value={form.inquilino_contato} onChange={v => upd('inquilino_contato', v)} />
-            <div>
-              <Field label="Aluguel Mensal" value={form.aluguel} onChange={v => upd('aluguel', v)} type="number" placeholder="R$" />
-              {Number(form.aluguel) > 0 && (
-                <div style={{ marginTop: 6, fontSize: 12, color: previewNOI >= 0 ? '#34D399' : '#F87171' }}>
-                  NOI estimado: {fmtR(previewNOI)}/ano
+            {form.status !== 'Uso Próprio' && (
+              <>
+                <Field label="Inquilino" value={form.inquilino} onChange={v => upd('inquilino', v)} />
+                <Field label="Contato Inquilino" value={form.inquilino_contato} onChange={v => upd('inquilino_contato', v)} />
+                <div>
+                  <Field label="Aluguel Mensal" value={form.aluguel} onChange={v => upd('aluguel', v)} type="number" placeholder="R$" />
+                  {Number(form.aluguel) > 0 && (
+                    <div style={{ marginTop: 6, fontSize: 12, color: previewNOI >= 0 ? '#34D399' : '#F87171' }}>
+                      NOI estimado: {fmtR(previewNOI)}/ano
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+              </>
+            )}
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr', gap: 16, marginBottom: 20 }}>
-            <Field label="Início Contrato" value={form.contrato_inicio} onChange={v => upd('contrato_inicio', v)} type="date" />
-            <Field label="Fim Contrato" value={form.contrato_fim} onChange={v => upd('contrato_fim', v)} type="date" />
-            <Field label="Índice Reajuste" value={form.indice_reajuste} onChange={v => upd('indice_reajuste', v)} options={INDICES} />
-            <Field label="Próx. Reajuste" value={form.data_proximo_reajuste} onChange={v => upd('data_proximo_reajuste', v)} type="date" />
-            <Field label="Garantia" value={form.garantia} onChange={v => upd('garantia', v)} options={GARANTIAS} />
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 28 }}>
-            <Field label="Imobiliária" value={form.imobiliaria} onChange={v => upd('imobiliaria', v)} />
-            <Field label="Taxa Adm %" value={form.taxa_adm} onChange={v => upd('taxa_adm', v)} type="number" suffix="%" />
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
-              <label style={{ ...S.label, marginBottom: 0, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                <input type="checkbox" checked={form.inadimplente || false} onChange={e => upd('inadimplente', e.target.checked)} />
-                Inadimplente
-              </label>
-            </div>
-          </div>
+          {form.status !== 'Uso Próprio' && (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr', gap: 16, marginBottom: 20 }}>
+                <Field label="Início Contrato" value={form.contrato_inicio} onChange={v => upd('contrato_inicio', v)} type="date" />
+                <Field label="Fim Contrato" value={form.contrato_fim} onChange={v => upd('contrato_fim', v)} type="date" />
+                <Field label="Índice Reajuste" value={form.indice_reajuste} onChange={v => upd('indice_reajuste', v)} options={INDICES} />
+                <Field label="Próx. Reajuste" value={form.data_proximo_reajuste} onChange={v => upd('data_proximo_reajuste', v)} type="date" />
+                <Field label="Garantia" value={form.garantia} onChange={v => upd('garantia', v)} options={GARANTIAS} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 28 }}>
+                <Field label="Imobiliária" value={form.imobiliaria} onChange={v => upd('imobiliaria', v)} />
+                <Field label="Taxa Adm %" value={form.taxa_adm} onChange={v => upd('taxa_adm', v)} type="number" suffix="%" />
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
+                  <label style={{ ...S.label, marginBottom: 0, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={form.inadimplente || false} onChange={e => upd('inadimplente', e.target.checked)} />
+                    Inadimplente
+                  </label>
+                </div>
+              </div>
+            </>
+          )}
+          {form.status === 'Uso Próprio' && <div style={{ marginBottom: 28 }} />}
 
           {/* Charges */}
           <div style={S.formSection}>Encargos</div>
@@ -944,7 +958,7 @@ function CadastroTab({ imoveis, onSave, onEdit, onDelete, user }) {
                       <td style={S.td}>{im.cidade}/{im.uf}</td>
                       <td style={S.td}><span style={S.badge(im.titular === 'PF' ? '#60A5FA' : '#A78BFA')}>{im.titular}</span></td>
                       <td style={S.td}>{fmtR(im.valor_mercado)}</td>
-                      <td style={S.td}>{fmtR(im.aluguel)}</td>
+                      <td style={S.td}>{im.status === 'Uso Próprio' ? <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>—</span> : fmtR(im.aluguel)}</td>
                       <td style={S.td}><span style={S.badge(STATUS_COLORS[im.status] || '#60A5FA')}>{im.status}</span></td>
                       <td style={S.td}>
                         <div style={{ display: 'flex', gap: 8 }}>
@@ -3246,7 +3260,7 @@ export default function RealEstatePage() {
               logradouro: im.logradouro, numero: im.numero,
               bairro: im.bairro, cidade: im.cidade, uf: im.uf,
               tipo: im.tipo, uso: im.uso, area_m2: Number(im.area_m2) || 70,
-              padrao: im.padrao || 'Médio',
+              padrao: im.padrao || 'Médio', status: im.status || '',
             }),
           });
           const data = await res.json();
@@ -3372,7 +3386,16 @@ export default function RealEstatePage() {
           <div style={{ textAlign: 'center', padding: 80, color: 'var(--text-muted)' }}>Carregando dados...</div>
         ) : (
           <>
-            {tab === 'dashboard' && <DashboardTab imoveis={imoveis} autoEstimating={autoEstimating} />}
+            {tab === 'dashboard' && <DashboardTab imoveis={imoveis} autoEstimating={autoEstimating} isAdmin={isAdmin} onResetEstimates={async () => {
+              // Zero all valor_mercado to force re-evaluation by the new multi-pass system
+              for (const im of imoveis) {
+                if (im.valor_mercado && im.logradouro) {
+                  await supabase.from('imoveis').update({ valor_mercado: 0 }).eq('id', im.id);
+                }
+              }
+              autoEstimateRef.current.clear();
+              await loadData();
+            }} />}
             {tab === 'portfolio' && <PortfolioWrapper imoveis={imoveis} onSave={saveImovel} onEdit={editImovel} onDelete={deleteImovel} user={user} ddItems={ddItems} onSaveDD={saveDD} onUpdateDD={updateDD} />}
             {tab === 'operacional' && <OperacionalTab imoveis={imoveis} recibos={recibos} ocorrencias={ocorrencias} manutencoes={manutencoes} onSaveRecibo={saveRecibo} onSaveOcorrencia={saveOcorrencia} onSaveManutencao={saveManutencao} onUpdateImovel={updateImovel} />}
             {tab === 'financeiro' && <FinanceiroWrapper imoveis={imoveis} dividas={dividas} manutencoes={manutencoes} />}
