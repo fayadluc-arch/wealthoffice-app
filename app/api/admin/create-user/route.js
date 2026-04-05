@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 // Admin endpoint to create new users
-// Uses service_role key if available, otherwise anon key with signUp
+// Receives admin's auth token to authenticate the profile insert
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -14,81 +14,82 @@ export async function POST(request) {
       return NextResponse.json({ erro: 'Supabase não configurado' }, { status: 500 });
     }
 
-    const { name, email, role, password } = await request.json();
+    const { name, email, role, password, adminToken } = await request.json();
 
     if (!email || !name) {
       return NextResponse.json({ erro: 'Nome e email são obrigatórios' }, { status: 400 });
     }
 
-    const supabase = createClient(supabaseUrl, serviceRoleKey || anonKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
-
-    // Generate a temporary password if not provided
     const tempPassword = password || `WO_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
 
     if (serviceRoleKey) {
-      // Admin API — create user directly (no confirmation email needed)
+      // Best path: service role key — full admin control
+      const supabase = createClient(supabaseUrl, serviceRoleKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      });
+
       const { data: authData, error: authError } = await supabase.auth.admin.createUser({
         email,
         password: tempPassword,
-        email_confirm: true, // auto-confirm
+        email_confirm: true,
         user_metadata: { name },
       });
 
       if (authError) {
-        console.error('[admin/create-user] auth error:', authError.message);
         return NextResponse.json({ erro: authError.message }, { status: 400 });
       }
 
-      // Update profile with role
-      const { error: profileError } = await supabase.from('profiles').upsert({
-        id: authData.user.id,
-        email,
-        name,
-        role: role || 'client',
+      await supabase.from('profiles').upsert({
+        id: authData.user.id, email, name, role: role || 'client',
       });
-
-      if (profileError) {
-        console.error('[admin/create-user] profile error:', profileError.message);
-      }
 
       return NextResponse.json({
-        sucesso: true,
-        userId: authData.user.id,
-        email,
+        sucesso: true, userId: authData.user.id, email,
         senhaTemporaria: tempPassword,
-        mensagem: `Usuário criado. Senha temporária: ${tempPassword}`,
       });
     } else {
-      // Fallback: use signUp (sends confirmation email)
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+      // Fallback: signUp + use admin's token for profile insert
+      const anonSupabase = createClient(supabaseUrl, anonKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      });
+
+      // Step 1: Create auth user via signUp
+      const { data: signUpData, error: signUpError } = await anonSupabase.auth.signUp({
         email,
         password: tempPassword,
         options: { data: { name } },
       });
 
       if (signUpError) {
-        console.error('[admin/create-user] signup error:', signUpError.message);
         return NextResponse.json({ erro: signUpError.message }, { status: 400 });
       }
 
-      // Try to update profile role
-      if (signUpData?.user?.id) {
-        await supabase.from('profiles').upsert({
-          id: signUpData.user.id,
-          email,
-          name,
-          role: role || 'client',
+      const userId = signUpData?.user?.id;
+
+      // Step 2: Use admin's token to insert profile (bypasses RLS since admin is authenticated)
+      if (userId && adminToken) {
+        const adminSupabase = createClient(supabaseUrl, anonKey, {
+          global: { headers: { Authorization: `Bearer ${adminToken}` } },
+          auth: { autoRefreshToken: false, persistSession: false },
         });
+
+        const { error: profileError } = await adminSupabase.from('profiles').upsert({
+          id: userId, email, name, role: role || 'client',
+        });
+
+        if (profileError) {
+          console.error('[admin/create-user] profile insert error:', profileError.message);
+          // Profile insert failed — try RPC or direct approach
+          // The user was created in auth, just profile is missing
+          return NextResponse.json({
+            sucesso: true, userId, email, senhaTemporaria: tempPassword,
+            aviso: 'Usuário criado no auth, mas perfil precisa ser atualizado manualmente. O usuário deve fazer login para aparecer na lista.',
+          });
+        }
       }
 
       return NextResponse.json({
-        sucesso: true,
-        userId: signUpData?.user?.id,
-        email,
-        senhaTemporaria: tempPassword,
-        mensagem: `Conta criada. O usuário receberá email de confirmação. Senha temporária: ${tempPassword}`,
+        sucesso: true, userId, email, senhaTemporaria: tempPassword,
       });
     }
   } catch (err) {

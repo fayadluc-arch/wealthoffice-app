@@ -3600,10 +3600,13 @@ function AdminTab({ clients, user, onRefresh }) {
     if (!newUserEmail || !newUserName) return;
     setCreating(true);
     try {
+      // Get admin's auth token to pass for profile insert
+      const { data: { session } } = await supabase.auth.getSession();
+      const adminToken = session?.access_token || '';
       const res = await fetch('/api/admin/create-user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newUserName, email: newUserEmail, role: newUserRole }),
+        body: JSON.stringify({ name: newUserName, email: newUserEmail, role: newUserRole, adminToken }),
       });
       const data = await res.json();
       if (data.sucesso) {
@@ -3746,7 +3749,7 @@ export default function RealEstatePage() {
 
   useEffect(() => {
     if (!supabase || !user || !isAdmin) return;
-    supabase.from('profiles').select('*').eq('role', 'client').order('name').then(({ data }) => setClients(data || []));
+    supabase.from('profiles').select('*').neq('id', user.id).order('name').then(({ data }) => setClients(data || []));
   }, [user, isAdmin]);
 
   // Load data
@@ -4011,7 +4014,7 @@ export default function RealEstatePage() {
             {tab === 'pipeline' && <PipelineTab pipeline={pipeline} onSavePipeline={savePipeline} onUpdatePipeline={updatePipeline} onDeletePipeline={deletePipeline} />}
             {tab === 'relatorio' && <RelatorioTab imoveis={imoveis} recibos={recibos} manutencoes={manutencoes} />}
             {tab === 'admin' && isAdmin && <AdminTab clients={clients} user={user} onRefresh={async () => {
-              const { data } = await supabase.from('profiles').select('*').eq('role', 'client').order('name');
+              const { data } = await supabase.from('profiles').select('*').neq('id', user.id).order('name');
               setClients(data || []);
               await loadData();
             }} />}
