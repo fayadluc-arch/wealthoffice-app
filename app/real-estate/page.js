@@ -333,7 +333,7 @@ function DashboardTab({ imoveis, autoEstimating, onResetEstimates, isAdmin }) {
           const equityInvestido = custoTotal - dividaTotal;
           const noiAnual = data.reduce((s, i) => s + calcNOI(i), 0);
           const coc = equityInvestido > 0 ? (aluguelAnualTotal / equityInvestido) * 100 : 0;
-          const payback = noiAnual > 0 ? equityInvestido / noiAnual : 0;
+
           const patrimonio = data.reduce((s, i) => s + (Number(i.valor_mercado) || Number(i.custo_aquisicao) || 0), 0);
           const valorizacao = custoTotal > 0 ? ((patrimonio - custoTotal) / custoTotal) * 100 : 0;
           const emConstrucao = data.filter(i => i.estagio === 'Em Construção' || i.estagio === 'Na Planta').length;
@@ -1837,110 +1837,134 @@ function MotorFinanceiroTab({ imoveis }) {
 // TAB 5: VALUATION
 // ============================================================
 function ValuationTab({ imoveis }) {
-  const [subtab, setSubtab] = useState('banda');
-  const [selectedId, setSelectedId] = useState('');
-  const [capRate, setCapRate] = useState(7);
-  const [inputs, setInputs] = useState({ liquidez: '', custoRepo: '', comparavel: '', estrategico: '' });
+  const [aiResult, setAiResult] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
 
-  const im = imoveis.find(i => i.id === selectedId);
+  // Group by bairro/região
+  const byRegiao = useMemo(() => {
+    const groups = {};
+    imoveis.forEach(im => {
+      const regiao = `${im.bairro || 'Sem bairro'}, ${im.cidade || 'SP'}`;
+      if (!groups[regiao]) groups[regiao] = [];
+      groups[regiao].push(im);
+    });
+    return groups;
+  }, [imoveis]);
+
+  // Totals
+  const totalVM = imoveis.reduce((s, i) => s + (Number(i.valor_mercado) || 0), 0);
+  const totalCusto = imoveis.reduce((s, i) => s + (Number(i.custo_aquisicao) || 0), 0);
+  const totalArea = imoveis.reduce((s, i) => s + (Number(i.area_m2) || 0), 0);
+  const valorizTotal = totalCusto > 0 ? ((totalVM / totalCusto) - 1) * 100 : 0;
+
+  async function runValuation() {
+    setAiLoading(true);
+    setAiResult(null);
+    const resumo = imoveis.map(im => `${im.nome || im.logradouro}: ${im.tipo} ${im.area_m2}m² em ${im.bairro}, ${im.cidade}/${im.uf}. VM atual: ${fmtR(im.valor_mercado)}. Custo: ${fmtR(im.custo_aquisicao)}.`).join('\n');
+    try {
+      const res = await fetch('/api/gemini-analysis', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: `Analise o valuation do seguinte portfólio imobiliário e forneça R$/m² de referência por bairro/região com dados reais de mercado:\n\n${resumo}\n\nPara cada ativo, indique:\n1. R$/m² médio da região (dados reais)\n2. Se o valor atual está acima, na média ou abaixo do mercado\n3. Potencial de valorização ou risco de desvalorização\n4. Resumo executivo do portfólio com recomendações`,
+          tipo: 'estudo',
+        }),
+      });
+      const data = await res.json();
+      if (!data.erro) setAiResult(data.resultado);
+      else setAiResult('Erro: ' + data.erro);
+    } catch (err) { setAiResult('Erro de conexão'); }
+    setAiLoading(false);
+  }
+
+  // Simple markdown renderer
+  function renderMd(text) {
+    if (!text) return null;
+    return text.split('\n').map((line, i) => {
+      if (line.startsWith('## ')) return <div key={i} style={{ fontSize: 16, fontWeight: 700, marginTop: 24, marginBottom: 10, color: 'var(--accent)', fontFamily: 'var(--font-serif)' }}>{line.substring(3)}</div>;
+      if (line.startsWith('### ')) return <div key={i} style={{ fontSize: 14, fontWeight: 700, marginTop: 20, marginBottom: 8 }}>{line.substring(4)}</div>;
+      if (line.startsWith('# ')) return <div key={i} style={{ fontSize: 18, fontWeight: 700, marginTop: 24, marginBottom: 12, fontFamily: 'var(--font-serif)' }}>{line.substring(2)}</div>;
+      if (line.startsWith('- ') || line.startsWith('* ')) return <div key={i} style={{ paddingLeft: 16, marginBottom: 4, fontSize: 13, lineHeight: 1.7, color: 'var(--text-secondary)' }}>• {line.substring(2).replace(/\*\*(.+?)\*\*/g, '$1')}</div>;
+      if (line.trim()) return <p key={i} style={{ fontSize: 13, lineHeight: 1.8, color: 'var(--text-secondary)', marginBottom: 8 }}>{line.replace(/\*\*(.+?)\*\*/g, '$1')}</p>;
+      return null;
+    });
+  }
 
   return (
     <div>
-      <div style={S.subtabs}>
-        {['banda', 'renda', 'comparaveis'].map(t => (
-          <button key={t} style={S.subtab(subtab === t)} onClick={() => setSubtab(t)}>
-            {{ banda: 'Banda de Valor', renda: 'Por Renda / Taxa de Capitalização', comparaveis: 'Comparáveis IA' }[t]}
-          </button>
+      {/* Summary KPIs */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
+        {[
+          { label: 'Valor de Mercado', value: fmtR(totalVM), color: '#60A5FA' },
+          { label: 'Custo de Aquisição', value: fmtR(totalCusto), color: 'var(--text-muted)' },
+          { label: 'Valorização Total', value: (valorizTotal > 0 ? '+' : '') + valorizTotal.toFixed(1) + '%', color: valorizTotal >= 0 ? '#34D399' : '#F87171' },
+          { label: 'R$/m² Médio', value: totalArea > 0 ? fmtR(totalVM / totalArea) + '/m²' : '—', color: '#FBBF24' },
+        ].map(k => (
+          <div key={k.label} style={{ background: 'var(--bg-surface)', borderRadius: 12, border: '1px solid var(--border)', padding: '16px 20px', textAlign: 'center' }}>
+            <div style={{ fontSize: 22, fontWeight: 700, color: k.color, fontVariantNumeric: 'tabular-nums' }}>{k.value}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{k.label}</div>
+          </div>
         ))}
       </div>
 
-      <div style={{ marginBottom: 20 }}>
-        <label style={S.label}>Selecionar Ativo</label>
-        <select style={{ ...S.select, maxWidth: 400 }} value={selectedId} onChange={e => setSelectedId(e.target.value)}>
-          <option value="">Selecionar imóvel</option>
-          {imoveis.map(im => <option key={im.id} value={im.id}>{im.nome || im.logradouro}</option>)}
-        </select>
+      {/* Valuation by Region */}
+      <div style={S.card}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+          <div style={S.formSection}>Valuation por Região — R$/m²</div>
+          <button style={S.btn('primary')} disabled={aiLoading} onClick={runValuation}>
+            {aiLoading ? 'Analisando...' : 'Análise IA do Portfólio'}
+          </button>
+        </div>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={S.table}>
+            <thead><tr>
+              {['Ativo', 'Bairro / Região', 'Tipo', 'Área', 'Custo', 'Valor Mercado', 'R$/m²', 'Valoriz.'].map(h => (
+                <th key={h} style={S.th}>{h}</th>
+              ))}
+            </tr></thead>
+            <tbody>
+              {Object.entries(byRegiao).map(([regiao, items]) => (
+                <React.Fragment key={regiao}>
+                  {items.map((im, idx) => {
+                    const vm = Number(im.valor_mercado) || 0;
+                    const custo = Number(im.custo_aquisicao) || 0;
+                    const area = Number(im.area_m2) || 0;
+                    const m2 = area > 0 ? vm / area : 0;
+                    const valoriz = custo > 0 ? ((vm / custo) - 1) * 100 : 0;
+                    return (
+                      <tr key={im.id}>
+                        <td style={{ ...S.td, fontWeight: 600 }}>{im.nome || im.logradouro || '—'}</td>
+                        <td style={S.td}>{im.bairro || '—'}, {im.cidade}/{im.uf}</td>
+                        <td style={S.td}><span style={S.badge(im.uso === 'Comercial' ? '#60A5FA' : im.uso === 'Industrial' ? '#FBBF24' : '#34D399')}>{im.tipo}</span></td>
+                        <td style={{ ...S.td, fontVariantNumeric: 'tabular-nums' }}>{area > 0 ? area + ' m²' : '—'}</td>
+                        <td style={{ ...S.td, fontVariantNumeric: 'tabular-nums', color: 'var(--text-muted)' }}>{fmtR(custo)}</td>
+                        <td style={{ ...S.td, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmtR(vm)}</td>
+                        <td style={{ ...S.td, fontWeight: 700, color: '#60A5FA', fontVariantNumeric: 'tabular-nums' }}>{m2 > 0 ? fmtR(m2) : '—'}</td>
+                        <td style={{ ...S.td, fontWeight: 600, color: valoriz >= 0 ? '#34D399' : '#F87171' }}>{custo > 0 ? (valoriz > 0 ? '+' : '') + valoriz.toFixed(0) + '%' : '—'}</td>
+                      </tr>
+                    );
+                  })}
+                </React.Fragment>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      {!im ? (
-        <div style={S.emptyState}>Selecione um imóvel para avaliação</div>
-      ) : subtab === 'banda' ? (
-        <div style={S.card}>
-          <div style={S.formSection}>Banda de Valor — {im.nome || im.logradouro}</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 16, marginBottom: 24 }}>
-            <Field label="Liquidez Forçada" value={inputs.liquidez || Math.round((im.valor_mercado || 0) * 0.7)} onChange={v => setInputs(f => ({ ...f, liquidez: v }))} type="number" />
-            <Field label="Custo Reposição" value={inputs.custoRepo || Math.round((im.area_m2 || 0) * 8000)} onChange={v => setInputs(f => ({ ...f, custoRepo: v }))} type="number" />
-            <div>
-              <label style={S.label}>Por Renda (NOI/Cap)</label>
-              <div style={{ ...S.input, background: 'var(--bg-elevated)', color: '#34D399', fontWeight: 700 }}>
-                {fmtR(capRate > 0 ? calcNOI(im) / (capRate / 100) : 0)}
-              </div>
-            </div>
-            <Field label="Comparável/Pedido" value={inputs.comparavel || im.valor_mercado} onChange={v => setInputs(f => ({ ...f, comparavel: v }))} type="number" />
-            <Field label="Valor Estratégico" value={inputs.estrategico || Math.round((im.valor_mercado || 0) * 1.15)} onChange={v => setInputs(f => ({ ...f, estrategico: v }))} type="number" />
-          </div>
-          {(() => {
-            const vals = [
-              Number(inputs.liquidez) || (im.valor_mercado || 0) * 0.7,
-              Number(inputs.custoRepo) || (im.area_m2 || 0) * 8000,
-              capRate > 0 ? calcNOI(im) / (capRate / 100) : 0,
-              Number(inputs.comparavel) || im.valor_mercado || 0,
-              Number(inputs.estrategico) || (im.valor_mercado || 0) * 1.15,
-            ].filter(v => v > 0);
-            const media = vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
-            return (
-              <div style={{ textAlign: 'center', padding: 32, background: 'linear-gradient(135deg, rgba(96,165,250,0.08) 0%, rgba(96,165,250,0.02) 100%)', borderRadius: 16, border: '1px solid rgba(96,165,250,0.2)' }}>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: 8 }}>Valor Médio Estimado</div>
-                <div style={{ fontSize: 36, fontWeight: 700, color: '#60A5FA', fontFamily: 'var(--font-serif)' }}>{fmtR(media)}</div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>Média de {vals.length} metodologias</div>
-              </div>
-            );
-          })()}
+      {/* AI Result */}
+      {aiLoading && (
+        <div style={{ ...S.card, textAlign: 'center', padding: 40 }}>
+          <div style={{ width: 32, height: 32, border: '3px solid rgba(96,165,250,0.3)', borderTopColor: '#60A5FA', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 16px' }} />
+          <div style={{ color: 'var(--text-muted)', fontSize: 14 }}>Analisando R$/m² por região com dados de mercado...</div>
         </div>
-      ) : subtab === 'renda' ? (
+      )}
+      {aiResult && !aiLoading && (
         <div style={S.card}>
-          <div style={S.formSection}>Valuation por Renda — {im.nome || im.logradouro}</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 24 }}>
-            <Field label="Taxa de Capitalização %" value={capRate} onChange={v => setCapRate(v)} type="number" suffix="%" />
-            <div>
-              <label style={S.label}>Renda Líquida Anual</label>
-              <div style={{ ...S.input, background: 'var(--bg-elevated)', fontWeight: 600 }}>{fmtR(calcNOI(im))}</div>
-            </div>
-          </div>
-          {(() => {
-            const noi = calcNOI(im);
-            const valorRenda = capRate > 0 ? noi / (capRate / 100) : 0;
-            const yieldOnCost = (im.custo_aquisicao || 0) > 0 ? (noi / im.custo_aquisicao) * 100 : 0;
-            const valorCriado = valorRenda - (im.custo_aquisicao || 0);
-            return (
-              <div style={S.grid3}>
-                <div style={{ ...S.kpiCard(true), textAlign: 'center' }}>
-                  <div style={S.kpiLabel}>Valor por Renda</div>
-                  <div style={S.kpiValue('#60A5FA')}>{fmtR(valorRenda)}</div>
-                </div>
-                <div style={{ ...S.kpiCard(), textAlign: 'center' }}>
-                  <div style={S.kpiLabel}>Retorno s/ Custo</div>
-                  <div style={S.kpiValue('#A78BFA')}>{fmtPct(yieldOnCost)}</div>
-                </div>
-                <div style={{ ...S.kpiCard(), textAlign: 'center' }}>
-                  <div style={S.kpiLabel}>Valor Criado</div>
-                  <div style={S.kpiValue(valorCriado >= 0 ? '#34D399' : '#F87171')}>{fmtR(valorCriado)}</div>
-                </div>
-              </div>
-            );
-          })()}
-        </div>
-      ) : (
-        <div style={S.card}>
-          <div style={S.formSection}>Comparáveis via IA — {im.nome || im.logradouro}</div>
-          <p style={{ color: 'var(--text-secondary)', marginBottom: 24, lineHeight: 1.7 }}>
-            Análise de comparáveis de mercado seguindo a metodologia ABNT NBR 14653.
-          </p>
-          <button style={S.btn('primary')} onClick={() => {
-            if (window.sendPrompt) window.sendPrompt(`Faça uma análise de comparáveis de mercado (ABNT NBR 14653) para: ${im.tipo} de ${im.area_m2 || '?'}m² em ${im.bairro || '?'}, ${im.cidade || '?'}/${im.uf || 'SP'}. Padrão: ${im.padrao}. Valor atual de mercado: ${fmtR(im.valor_mercado)}. Aluguel: ${fmtR(im.aluguel)}. Apresente: 1) Comparáveis encontrados (mínimo 3), 2) Ajustes (localização, padrão, área), 3) Valor unitário (R$/m²), 4) Faixa de valor, 5) Conclusão técnica.`);
-          }}>
-            {Icons.brain} Buscar Comparáveis IA
-          </button>
+          <div style={S.formSection}>Análise de Mercado — Gemini + Google Search</div>
+          {typeof aiResult === 'string' && aiResult.startsWith('Erro') ? (
+            <div style={{ color: '#F87171' }}>{aiResult}</div>
+          ) : (
+            <div>{renderMd(aiResult)}</div>
+          )}
         </div>
       )}
     </div>
@@ -3602,15 +3626,15 @@ function ValuationWrapper({ imoveis }) {
       <div style={S.subtabs}>
         {[
           { id: 'valuation', label: 'Valuation' },
-          { id: 'decisao', label: 'Decisão' },
-          { id: 'mercado', label: 'Mercado IA' },
+          { id: 'mercado', label: 'Análise de Mercado' },
+          { id: 'decisao', label: 'Vender vs Manter' },
         ].map(s => (
           <button key={s.id} style={S.subtab(section === s.id)} onClick={() => setSection(s.id)}>{s.label}</button>
         ))}
       </div>
       {section === 'valuation' && <ValuationTab imoveis={imoveis} />}
-      {section === 'decisao' && <DecisaoTab imoveis={imoveis} />}
       {section === 'mercado' && <MercadoIATab imoveis={imoveis} />}
+      {section === 'decisao' && <DecisaoTab imoveis={imoveis} />}
     </div>
   );
 }
