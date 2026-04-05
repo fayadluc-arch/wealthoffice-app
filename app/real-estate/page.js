@@ -500,6 +500,10 @@ function CadastroTab({ imoveis, onSave, onEdit, onDelete, user, draftForm, setDr
   const [searchMode, setSearchMode] = useState('cep'); // 'cep' | 'nome'
   const [searchQuery, setSearchQuery] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [batchMode, setBatchMode] = useState(false);
+  const [batchFrom, setBatchFrom] = useState('');
+  const [batchTo, setBatchTo] = useState('');
+  const [batchSaving, setBatchSaving] = useState(false);
 
   const upd = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -1233,19 +1237,88 @@ function CadastroTab({ imoveis, onSave, onEdit, onDelete, user, draftForm, setDr
             </>
           )}
 
+          {/* Batch mode toggle */}
+          {!editingId && (
+            <div style={{ marginBottom: 16 }}>
+              <button
+                onClick={() => setBatchMode(!batchMode)}
+                style={{ background: 'none', border: 'none', color: batchMode ? '#60A5FA' : 'var(--text-muted)', cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '8px 0', display: 'flex', alignItems: 'center', gap: 6 }}
+              >
+                <span style={{ transform: batchMode ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.2s', display: 'inline-block' }}>▶</span>
+                Cadastro em lote (várias unidades do mesmo prédio)
+              </button>
+              {batchMode && (
+                <div style={{ marginTop: 12, padding: 16, background: 'linear-gradient(135deg, rgba(96,165,250,0.06) 0%, rgba(96,165,250,0.02) 100%)', borderRadius: 12, border: '1px solid rgba(96,165,250,0.15)' }}>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
+                    Cria múltiplas unidades com os mesmos dados, variando apenas o número/complemento.
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 16, alignItems: 'end' }}>
+                    <div>
+                      <label style={S.label}>Unidade Inicial</label>
+                      <input style={S.input} value={batchFrom} onChange={e => setBatchFrom(e.target.value)} placeholder="Ex: 101" />
+                    </div>
+                    <div>
+                      <label style={S.label}>Unidade Final</label>
+                      <input style={S.input} value={batchTo} onChange={e => setBatchTo(e.target.value)} placeholder="Ex: 110" />
+                    </div>
+                    <button style={{ ...S.btn('primary'), padding: '10px 24px', whiteSpace: 'nowrap' }} disabled={batchSaving || !batchFrom || !batchTo}
+                      onClick={async () => {
+                        const from = parseInt(batchFrom);
+                        const to = parseInt(batchTo);
+                        if (isNaN(from) || isNaN(to) || to < from || to - from > 50) {
+                          alert('Intervalo inválido (máximo 50 unidades)');
+                          return;
+                        }
+                        if (!confirm(`Criar ${to - from + 1} unidades (${from} a ${to}) com os dados do formulário?`)) return;
+                        setBatchSaving(true);
+                        let created = 0;
+                        for (let n = from; n <= to; n++) {
+                          const data = {};
+                          Object.entries(form).forEach(([k, v]) => { if (v !== '' && v !== null && v !== undefined) data[k] = v; });
+                          ['area_m2', 'quartos', 'custo_aquisicao', 'valor_mercado', 'divida', 'parcela_mensal', 'aluguel', 'taxa_adm', 'iptu_anual', 'condominio_mensal', 'seguro_anual', 'capex_pendente'].forEach(k => {
+                            data[k] = data[k] == null || data[k] === '' ? 0 : Number(data[k]);
+                          });
+                          data.user_id = user.id;
+                          data.complemento = `Unidade ${n}`;
+                          data.nome = form.nome ? `${form.nome} - Un ${n}` : `Unidade ${n}`;
+                          data.tipo = data.tipo || 'Apartamento';
+                          data.uso = data.uso || 'Residencial';
+                          data.status = data.status || 'Vago';
+                          data.titular = data.titular || 'PF';
+                          data.uf = data.uf || 'SP';
+                          ['data_aquisicao', 'contrato_inicio', 'contrato_fim', 'data_proximo_reajuste', 'data_entrega'].forEach(k => { if (!data[k]) data[k] = null; });
+                          try { await onSave(data); created++; } catch (e) { console.error('Batch error unit', n, e); }
+                        }
+                        alert(`${created} unidades criadas com sucesso!`);
+                        setBatchSaving(false);
+                        setBatchMode(false);
+                        setBatchFrom('');
+                        setBatchTo('');
+                        setForm({ ...EMPTY_IMOVEL });
+                        setSubtab('todos');
+                      }}>
+                      {batchSaving ? 'Criando...' : `Criar ${batchFrom && batchTo ? Math.max(0, parseInt(batchTo) - parseInt(batchFrom) + 1) || '?' : '?'} unidades`}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           <div style={{ display: 'flex', gap: 12 }}>
             <button style={S.btn('primary')} onClick={handleSave} disabled={saving}>
               {saving ? 'Salvando...' : editingId ? 'Atualizar Ativo' : 'Cadastrar Ativo'}
             </button>
             {editingId && (
-              <button style={S.btn()} onClick={() => { setEditingId(null); setForm({ ...EMPTY_IMOVEL }); }}>Cancelar</button>
-            )}
-            {(form.titular === 'Holding' || form.titular === 'SPE' || form.titular === 'PF') && (
-              <button style={S.btn('accent')} onClick={() => {
-                if (window.sendPrompt) window.sendPrompt(`Analise a estrutura patrimonial para este imóvel: Titular: ${form.titular}, Valor: ${fmtR(Number(form.valor_mercado) || 0)}, Aluguel: ${fmtR(Number(form.aluguel) || 0)}, Tipo: ${form.tipo}. Compare PF vs Holding vs SPE considerando IRPF, ITCMD, blindagem patrimonial e custo de manutenção.`);
-              }}>
-                Analisar Estrutura no Chat ↗
-              </button>
+              <>
+                <button style={S.btn()} onClick={() => { setEditingId(null); setForm({ ...EMPTY_IMOVEL }); }}>Cancelar</button>
+                <button style={S.btn('accent')} onClick={() => {
+                  setEditingId(null);
+                  setForm(f => ({ ...f, nome: f.nome ? f.nome + ' (cópia)' : 'Cópia' }));
+                }}>
+                  Duplicar
+                </button>
+              </>
             )}
           </div>
         </div>
