@@ -752,7 +752,7 @@ function CadastroTab({ imoveis, onSave, onEdit, onDelete, user, draftForm, setDr
             <div style={{ marginBottom: 20, padding: 16, background: 'linear-gradient(135deg, rgba(52,211,153,0.06) 0%, rgba(52,211,153,0.02) 100%)', borderRadius: 12, border: '1px solid rgba(52,211,153,0.15)' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: '#34D399', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Dados do Lote — GeoSampa</div>
-                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Prefeitura de São Paulo</span>
+                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>PDE Lei 16.050/2014</span>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
                 {[
@@ -767,6 +767,92 @@ function CadastroTab({ imoveis, onSave, onEdit, onDelete, user, draftForm, setDr
                   </div>
                 ))}
               </div>
+
+              {/* Zoning analysis — expanded for Terrenos */}
+              {geosampaData.zoneamento && (
+                <div style={{ marginTop: 16 }}>
+                  {/* Zone name + params */}
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#34D399', marginBottom: 8 }}>
+                    {geosampaData.zoneamento.nome || geosampaData.zoneamento.zona}
+                  </div>
+                  {geosampaData.zoneamento.parametros && (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 12 }}>
+                      {[
+                        { label: 'CA Básico', value: geosampaData.zoneamento.parametros.ca_basico },
+                        { label: 'CA Máximo', value: geosampaData.zoneamento.parametros.ca_maximo },
+                        { label: 'Taxa Ocup.', value: `${(geosampaData.zoneamento.parametros.taxa_ocupacao * 100).toFixed(0)}%` },
+                        { label: 'Gabarito', value: geosampaData.zoneamento.parametros.gabarito },
+                      ].map(p => (
+                        <div key={p.label} style={{ background: 'var(--bg-card)', borderRadius: 8, padding: '8px 10px', border: '1px solid var(--border)', textAlign: 'center' }}>
+                          <div style={{ fontSize: 8, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 2 }}>{p.label}</div>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: '#34D399' }}>{p.value}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Usos permitidos */}
+                  {geosampaData.zoneamento.usos_permitidos && (
+                    <div style={{ marginBottom: 10 }}>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>Usos Permitidos</div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                        {geosampaData.zoneamento.usos_permitidos.map(u => (
+                          <span key={u} style={{ ...S.badge('#34D399'), fontSize: 10, padding: '3px 10px' }}>{u}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Potencial construtivo (terrenos) */}
+                  {geosampaData.zoneamento.potencial_construtivo && (form.tipo === 'Terreno' || !form.tipo) && (
+                    <div style={{ marginTop: 12, padding: 14, background: 'var(--bg-card)', borderRadius: 10, border: '1px solid rgba(52,211,153,0.2)' }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#34D399', marginBottom: 10 }}>Potencial Construtivo</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 12 }}>
+                        {[
+                          { label: 'Área Computável Básica', value: `${geosampaData.zoneamento.potencial_construtivo.area_computavel_basica.toLocaleString('pt-BR')} m²` },
+                          { label: 'Área Computável Máxima', value: `${geosampaData.zoneamento.potencial_construtivo.area_computavel_maxima.toLocaleString('pt-BR')} m²` },
+                          { label: 'Pavimentos Estimados', value: geosampaData.zoneamento.potencial_construtivo.pavimentos_estimados || '—' },
+                        ].map(p => (
+                          <div key={p.label} style={{ textAlign: 'center' }}>
+                            <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>{p.value}</div>
+                            <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: 2 }}>{p.label}</div>
+                          </div>
+                        ))}
+                      </div>
+                      {geosampaData.zoneamento.potencial_construtivo.outorga_onerosa && (
+                        <div style={{ fontSize: 11, color: '#FBBF24', marginBottom: 8 }}>
+                          Outorga onerosa necessária para {geosampaData.zoneamento.potencial_construtivo.area_outorga.toLocaleString('pt-BR')} m² acima do CA básico
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Ideias de uso (terrenos) */}
+                  {geosampaData.zoneamento.ideias && geosampaData.zoneamento.ideias.length > 0 && (form.tipo === 'Terreno' || !form.tipo) && (
+                    <div style={{ marginTop: 12 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 10 }}>Ideias de Desenvolvimento</div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {geosampaData.zoneamento.ideias.map((idea, i) => (
+                          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: 'var(--bg-card)', borderRadius: 8, border: '1px solid var(--border)' }}>
+                            <span style={{ ...S.badge(idea.viabilidade === 'Alta' ? '#34D399' : '#FBBF24'), fontSize: 9, padding: '2px 8px', minWidth: 40, textAlign: 'center' }}>{idea.viabilidade}</span>
+                            <div>
+                              <div style={{ fontSize: 13, fontWeight: 600 }}>{idea.tipo}</div>
+                              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{idea.desc}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Observação */}
+                  {geosampaData.zoneamento.observacao && (
+                    <div style={{ marginTop: 10, fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic', lineHeight: 1.6 }}>
+                      {geosampaData.zoneamento.observacao}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
