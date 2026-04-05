@@ -2831,7 +2831,7 @@ const EMPTY_DEAL = { nome: '', cidade: '', uf: 'SP', valor: '', cap_rate: '', es
 function PipelineTab({ pipeline, onSavePipeline, onUpdatePipeline, onDeletePipeline }) {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ ...EMPTY_DEAL });
-  const [viewMode, setViewMode] = useState('kanban');
+  const [viewMode, setViewMode] = useState('cards');
 
   const avgScore = (d) => {
     const scores = [d.score_localizacao, d.score_preco, d.score_yield, d.score_inquilino, d.score_estrutura].map(Number).filter(v => !isNaN(v));
@@ -2859,7 +2859,7 @@ function PipelineTab({ pipeline, onSavePipeline, onUpdatePipeline, onDeletePipel
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 24 }}>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button style={S.btn(viewMode === 'kanban' ? 'primary' : '')} onClick={() => setViewMode('kanban')}>Kanban</button>
+          <button style={S.btn(viewMode === 'cards' ? 'primary' : '')} onClick={() => setViewMode('cards')}>Cards</button>
           <button style={S.btn(viewMode === 'lista' ? 'primary' : '')} onClick={() => setViewMode('lista')}>Lista</button>
         </div>
         <button style={S.btn('primary')} onClick={() => setShowForm(!showForm)}>{Icons.plus} Novo Deal</button>
@@ -2906,7 +2906,7 @@ function PipelineTab({ pipeline, onSavePipeline, onUpdatePipeline, onDeletePipel
 
       {pipeline.length === 0 && !showForm ? (
         <div style={S.emptyState}>Nenhum deal no pipeline. Adicione novos deals para acompanhar oportunidades.</div>
-      ) : viewMode === 'kanban' ? (
+      ) : viewMode === 'cards' ? (
         <div style={{ display: 'flex', gap: 16, overflowX: 'auto', paddingBottom: 20 }}>
           {PIPELINE_STAGES.map(stage => {
             const deals = pipeline.filter(d => d.estagio === stage);
