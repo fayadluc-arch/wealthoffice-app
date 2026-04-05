@@ -1,0 +1,19 @@
+{
+  "functions": {
+    "app/api/fipezap/route.js": {
+      "maxDuration": 30
+    },
+    "app/api/cvm-fidc/route.js": {
+      "maxDuration": 30
+    },
+    "app/api/cvm-fii/route.js": {
+      "maxDuration": 30
+    },
+    "app/api/gemini-analysis/route.js": {
+      "maxDuration": 60
+    },
+    "app/api/real-estate-estimate/route.js": {
+      "maxDuration": 60
+    }
+  }
+}
