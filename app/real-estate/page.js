@@ -3461,11 +3461,39 @@ function AdminTab({ clients, user, onRefresh }) {
 
   return (
     <div>
+      {/* Add Client Form */}
+      <div style={S.card}>
+        <div style={S.formSection}>Adicionar Cliente</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr auto', gap: 16, alignItems: 'end' }}>
+          <div>
+            <label style={S.label}>Nome</label>
+            <input style={S.input} value={newUserName} onChange={e => setNewUserName(e.target.value)} placeholder="Nome completo" />
+          </div>
+          <div>
+            <label style={S.label}>Email</label>
+            <input style={S.input} value={newUserEmail} onChange={e => setNewUserEmail(e.target.value)} placeholder="email@exemplo.com" />
+          </div>
+          <div>
+            <label style={S.label}>Tipo</label>
+            <select style={S.select} value={newUserRole} onChange={e => setNewUserRole(e.target.value)}>
+              <option value="client">Cliente</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
+          <button style={{ ...S.btn('primary'), padding: '10px 24px', whiteSpace: 'nowrap' }} disabled={creating || !newUserName || !newUserEmail} onClick={createUser}>
+            {creating ? 'Criando...' : 'Adicionar'}
+          </button>
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10 }}>
+          O cliente receberá acesso ao cadastrar senha em wealthoffice.com.br
+        </div>
+      </div>
+
       {/* Users List */}
       <div style={S.card}>
-        <div style={S.formSection}>Usuários Cadastrados</div>
+        <div style={S.formSection}>Clientes Cadastrados ({clients.length})</div>
         {clients.length === 0 ? (
-          <div style={S.emptyState}>Nenhum cliente cadastrado. Peça ao usuário criar conta no site.</div>
+          <div style={S.emptyState}>Nenhum cliente cadastrado ainda.</div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={S.table}>
