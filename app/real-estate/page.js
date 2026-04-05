@@ -261,9 +261,10 @@ function DashboardTab({ imoveis, autoEstimating, onResetEstimates, isAdmin }) {
     const data = imoveis;
     const alugados = data.filter(i => i.status === 'Alugado');
     const receitaMensal = alugados.reduce((s, i) => s + (i.aluguel || 0), 0);
-    const noiAnual = data.reduce((s, i) => s + calcNOI(i), 0);
+    const noiAnual = alugados.reduce((s, i) => s + calcNOI(i), 0);
     const patrimonio = data.reduce((s, i) => s + (i.valor_mercado || i.custo_aquisicao || 0), 0);
-    const yieldPort = patrimonio > 0 ? (noiAnual / patrimonio) * 100 : 0;
+    const patAlugados = alugados.reduce((s, i) => s + (i.valor_mercado || i.custo_aquisicao || 0), 0);
+    const yieldPort = patAlugados > 0 ? (noiAnual / patAlugados) * 100 : 0;
     const vagos = data.filter(i => i.status === 'Vago').length;
     const vacancia = data.length > 0 ? (vagos / data.length) * 100 : 0;
     return { receitaMensal, noiAnual, patrimonio, yieldPort, vacancia, alugados: alugados.length, vagos };
@@ -290,9 +291,9 @@ function DashboardTab({ imoveis, autoEstimating, onResetEstimates, isAdmin }) {
       <div style={S.kpiGrid}>
         {[
           { label: 'Receita Mensal', value: fmtR(totais.receitaMensal), color: '#34D399', accent: true },
-          { label: 'Renda Líquida (NOI)', value: fmtR(totais.noiAnual), color: '#60A5FA' },
+          { label: 'Renda Líquida Anual', value: fmtR(totais.noiAnual), color: '#60A5FA' },
           { label: 'Patrimônio', value: fmtR(totais.patrimonio), sub: autoEstimating > 0 ? `Avaliando ${autoEstimating} imóveis...` : (isAdmin ? '_admin_reavalia' : null) },
-          { label: 'Yield Portfólio', value: fmtPct(totais.yieldPort), color: totais.yieldPort >= 6 ? '#34D399' : '#FBBF24' },
+          { label: 'Yield Locados', value: fmtPct(totais.yieldPort), color: totais.yieldPort >= 6 ? '#34D399' : '#FBBF24' },
           { label: 'Vacância', value: fmtPct(totais.vacancia), color: totais.vacancia > 10 ? '#F87171' : '#34D399' },
         ].map(k => (
           <div key={k.label} style={S.kpiCard(k.accent)}>
@@ -338,7 +339,7 @@ function DashboardTab({ imoveis, autoEstimating, onResetEstimates, isAdmin }) {
           const emConstrucao = data.filter(i => i.estagio === 'Em Construção' || i.estagio === 'Na Planta').length;
           return [
             { label: 'Retorno s/ Capital', value: fmtPct(coc), color: coc >= 8 ? '#34D399' : '#FBBF24' },
-            { label: 'Payback', value: payback > 0 ? payback.toFixed(1) + ' anos' : '—', color: payback <= 10 ? '#34D399' : '#F87171' },
+            { label: 'Payback Investimento', value: payback > 0 ? payback.toFixed(1) + ' anos' : '—', color: payback <= 10 ? '#34D399' : '#F87171' },
             { label: 'Valorização', value: fmtPct(valorizacao), color: valorizacao >= 0 ? '#34D399' : '#F87171' },
             { label: 'Em Construção', value: emConstrucao, color: emConstrucao > 0 ? '#60A5FA' : 'var(--text-primary)' },
           ].map(s => (
