@@ -257,6 +257,7 @@ function Field({ label, value, onChange, type = 'text', options, placeholder, su
 // TAB 1: DASHBOARD
 // ============================================================
 function DashboardTab({ imoveis, autoEstimating, onResetEstimates, isAdmin }) {
+  const [expandedSeg, setExpandedSeg] = useState(null);
   const totais = useMemo(() => {
     const data = imoveis;
     const alugados = data.filter(i => i.status === 'Alugado');
@@ -438,14 +439,18 @@ function DashboardTab({ imoveis, autoEstimating, onResetEstimates, isAdmin }) {
                 const pct = totalVM > 0 ? (v.vm / totalVM) * 100 : 0;
                 const valoriz = v.custo > 0 ? ((v.vm / v.custo) - 1) * 100 : 0;
                 const color = segColors[seg] || '#60A5FA';
+                const isExpanded = expandedSeg === seg;
                 return (
-                  <div key={seg} style={{ flex: 1, background: 'var(--bg-surface)', borderRadius: 12, border: '1px solid var(--border)', padding: '16px 20px' }}>
+                  <div key={seg} onClick={() => setExpandedSeg(isExpanded ? null : seg)} style={{ flex: 1, background: isExpanded ? `linear-gradient(135deg, ${color}11 0%, ${color}06 100%)` : 'var(--bg-surface)', borderRadius: 12, border: `1px solid ${isExpanded ? color + '44' : 'var(--border)'}`, padding: '16px 20px', cursor: 'pointer', transition: 'all 0.2s' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <div style={{ width: 10, height: 10, borderRadius: '50%', background: color }} />
                         <span style={{ fontSize: 13, fontWeight: 700 }}>{seg}</span>
                       </div>
-                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{v.count} {v.count === 1 ? 'imóvel' : 'imóveis'}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{v.count} {v.count === 1 ? 'imóvel' : 'imóveis'}</span>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={isExpanded ? color : 'var(--text-muted)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 0.2s' }}><polyline points="6 9 12 15 18 9"/></svg>
+                      </div>
                     </div>
                     <div style={{ fontSize: 18, fontWeight: 700, color, marginBottom: 4 }}>{fmtR(v.vm)}</div>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>{pct.toFixed(0)}% do portfólio</div>
@@ -469,6 +474,54 @@ function DashboardTab({ imoveis, autoEstimating, onResetEstimates, isAdmin }) {
                 return <div key={seg} style={{ width: pct + '%', background: segColors[seg] || '#60A5FA', transition: 'width 0.3s' }} />;
               })}
             </div>
+            {/* Drill-down: lista de ativos do segmento selecionado */}
+            {expandedSeg && (() => {
+              const segImoveis = imoveis.filter(im => (im.uso || 'Outros') === expandedSeg);
+              const color = segColors[expandedSeg] || '#60A5FA';
+              return (
+                <div style={{ marginTop: 16, borderTop: `1px solid ${color}33`, paddingTop: 16 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: color }} />
+                    Ativos — {expandedSeg} ({segImoveis.length})
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {segImoveis.map(im => {
+                      const custo = Number(im.custo_aquisicao) || 0;
+                      const vm = Number(im.valor_mercado) || 0;
+                      const valoriz = custo > 0 && vm > 0 ? ((vm / custo) - 1) * 100 : 0;
+                      const y = im.status === 'Alugado' ? calcYield(im) : null;
+                      return (
+                        <div key={im.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'var(--bg-surface)', borderRadius: 10, border: '1px solid var(--border)' }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontWeight: 600, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{im.nome || im.logradouro || '—'}</div>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                              {im.tipo} · {im.area_m2 ? im.area_m2 + 'm²' : '—'} · {im.bairro || im.cidade || '—'}/{im.uf || '—'}
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', gap: 20, alignItems: 'center', flexShrink: 0 }}>
+                            <div style={{ textAlign: 'right' }}>
+                              <div style={{ fontSize: 13, fontWeight: 700 }}>{fmtR(vm || custo)}</div>
+                              {custo > 0 && vm > 0 && (
+                                <div style={{ fontSize: 10, color: valoriz >= 0 ? '#34D399' : '#F87171', fontWeight: 600 }}>
+                                  {valoriz > 0 ? '+' : ''}{valoriz.toFixed(1)}%
+                                </div>
+                              )}
+                            </div>
+                            {y !== null && (
+                              <div style={{ textAlign: 'center', minWidth: 56 }}>
+                                <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.3px' }}>Yield</div>
+                                <div style={{ fontSize: 13, fontWeight: 600, color: y >= 6 ? '#34D399' : '#FBBF24' }}>{fmtPct(y)}</div>
+                              </div>
+                            )}
+                            <span style={{ ...S.badge(STATUS_COLORS[im.status] || '#60A5FA'), fontSize: 10 }}>{im.status}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         );
       })()}
