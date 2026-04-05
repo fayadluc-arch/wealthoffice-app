@@ -416,6 +416,63 @@ function DashboardTab({ imoveis, autoEstimating, onResetEstimates, isAdmin }) {
         );
       })()}
 
+      {/* Segregação por Segmento */}
+      {imoveis.length > 0 && (() => {
+        const segs = {};
+        imoveis.forEach(im => {
+          const seg = im.uso || 'Outros';
+          if (!segs[seg]) segs[seg] = { count: 0, vm: 0, custo: 0, aluguel: 0, area: 0 };
+          segs[seg].count++;
+          segs[seg].vm += Number(im.valor_mercado) || 0;
+          segs[seg].custo += Number(im.custo_aquisicao) || 0;
+          segs[seg].aluguel += im.status === 'Alugado' ? (Number(im.aluguel) || 0) : 0;
+          segs[seg].area += Number(im.area_m2) || 0;
+        });
+        const totalVM = Object.values(segs).reduce((s, v) => s + v.vm, 0);
+        const segColors = { 'Residencial': '#34D399', 'Comercial': '#60A5FA', 'Industrial': '#FBBF24', 'Misto': '#A78BFA' };
+        return (
+          <div style={S.card}>
+            <div style={S.formSection}>Composição por Segmento</div>
+            <div style={{ display: 'flex', gap: 16, marginBottom: 16 }}>
+              {Object.entries(segs).map(([seg, v]) => {
+                const pct = totalVM > 0 ? (v.vm / totalVM) * 100 : 0;
+                const valoriz = v.custo > 0 ? ((v.vm / v.custo) - 1) * 100 : 0;
+                const color = segColors[seg] || '#60A5FA';
+                return (
+                  <div key={seg} style={{ flex: 1, background: 'var(--bg-surface)', borderRadius: 12, border: '1px solid var(--border)', padding: '16px 20px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ width: 10, height: 10, borderRadius: '50%', background: color }} />
+                        <span style={{ fontSize: 13, fontWeight: 700 }}>{seg}</span>
+                      </div>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{v.count} {v.count === 1 ? 'imóvel' : 'imóveis'}</span>
+                    </div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color, marginBottom: 4 }}>{fmtR(v.vm)}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>{pct.toFixed(0)}% do portfólio</div>
+                    <div style={{ display: 'flex', gap: 16, fontSize: 11 }}>
+                      <span>Custo: {fmtR(v.custo)}</span>
+                      <span style={{ color: valoriz >= 0 ? '#34D399' : '#F87171', fontWeight: 600 }}>
+                        {valoriz > 0 ? '+' : ''}{valoriz.toFixed(0)}%
+                      </span>
+                    </div>
+                    {v.aluguel > 0 && (
+                      <div style={{ fontSize: 11, color: '#FBBF24', marginTop: 4 }}>Receita: {fmtR(v.aluguel)}/mês</div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            {/* Barra de composição */}
+            <div style={{ display: 'flex', height: 8, borderRadius: 4, overflow: 'hidden', background: 'var(--border)' }}>
+              {Object.entries(segs).map(([seg, v]) => {
+                const pct = totalVM > 0 ? (v.vm / totalVM) * 100 : 0;
+                return <div key={seg} style={{ width: pct + '%', background: segColors[seg] || '#60A5FA', transition: 'width 0.3s' }} />;
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Portfolio table */}
       <div style={S.card}>
         <div style={S.formSection}>Portfólio</div>
@@ -426,22 +483,18 @@ function DashboardTab({ imoveis, autoEstimating, onResetEstimates, isAdmin }) {
             <table style={S.table}>
               <thead>
                 <tr>
-                  {['Ativo', 'Tipo', 'Valor Mercado', 'Aluguel', 'Rentab.', 'Dív/Valor', 'Status', 'Alertas'].map(h => (
+                  {['Ativo', 'Tipo', 'Custo', 'Valor Mercado', 'Valoriz.', 'Aluguel', 'Rentab.', 'Status'].map(h => (
                     <th key={h} style={S.th}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {imoveis.map(im => {
-                  const noi = calcNOI(im);
                   const y = calcYield(im);
-                  const ltv = calcLTV(im);
-                  const df = diasFimContrato(im);
                   const isEstimating = !im.valor_mercado && autoEstimating > 0;
-                  const alerts = [];
-                  if (im.inadimplente) alerts.push('Inadimpl.');
-                  if (ltv > 70) alerts.push('Dív>' + Math.round(ltv) + '%');
-                  if (df !== null && df <= 90) alerts.push(df <= 0 ? 'Vencido' : df + 'd');
+                  const custo = Number(im.custo_aquisicao) || 0;
+                  const vm = Number(im.valor_mercado) || 0;
+                  const valoriz = custo > 0 && vm > 0 ? ((vm / custo) - 1) * 100 : 0;
                   return (
                     <tr key={im.id} className="table-row-hover">
                       <td style={S.td}>
@@ -449,25 +502,21 @@ function DashboardTab({ imoveis, autoEstimating, onResetEstimates, isAdmin }) {
                         <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{im.cidade}/{im.uf}</div>
                       </td>
                       <td style={S.td}>{im.tipo}</td>
+                      <td style={{ ...S.td, fontVariantNumeric: 'tabular-nums', color: 'var(--text-muted)' }}>{fmtR(custo)}</td>
                       <td style={S.td}>
                         {isEstimating ? (
                           <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>⏳ Estimando...</span>
                         ) : (
                           <div>
-                            <span style={{ fontWeight: 600 }}>{fmtR(im.valor_mercado)}</span>
+                            <span style={{ fontWeight: 600 }}>{fmtR(vm)}</span>
                             {im._estimated && <span style={{ ...S.badge('#60A5FA'), marginLeft: 6, fontSize: 9, padding: '2px 6px' }}>IA</span>}
                           </div>
                         )}
                       </td>
+                      <td style={{ ...S.td, color: valoriz >= 0 ? '#34D399' : '#F87171', fontWeight: 600 }}>{custo > 0 ? (valoriz > 0 ? '+' : '') + valoriz.toFixed(0) + '%' : '—'}</td>
                       <td style={S.td}>{im.status === 'Uso Próprio' ? <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>—</span> : fmtR(im.aluguel)}</td>
-                      <td style={{ ...S.td, color: y >= 6 ? '#34D399' : '#FBBF24' }}>{im.status === 'Uso Próprio' ? <span style={{ color: 'var(--text-muted)' }}>—</span> : fmtPct(y)}</td>
-                      <td style={{ ...S.td, color: ltv > 70 ? '#F87171' : 'var(--text-secondary)' }}>{fmtPct(ltv)}</td>
+                      <td style={{ ...S.td, color: y >= 6 ? '#34D399' : '#FBBF24' }}>{im.status === 'Alugado' ? fmtPct(y) : <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
                       <td style={S.td}><span style={S.badge(STATUS_COLORS[im.status] || '#60A5FA')}>{im.status}</span></td>
-                      <td style={S.td}>
-                        {alerts.length > 0 ? alerts.map((a, i) => (
-                          <span key={i} style={{ ...S.badge('#F87171'), marginRight: 4, fontSize: 10 }}>{a}</span>
-                        )) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
-                      </td>
                     </tr>
                   );
                 })}
