@@ -3,10 +3,9 @@ import { createClient } from '@supabase/supabase-js';
 
 // Seed demo client with realistic São Paulo real estate portfolio
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const supabase = (supabaseUrl && supabaseKey) ? createClient(supabaseUrl, supabaseKey) : null;
 
 const DEMO_IMOVEIS = [
   // 1. Apartamento alto padrão — Vila Nova Conceição (alugado)
@@ -143,6 +142,9 @@ const DEMO_IMOVEIS = [
 
 export async function POST(request) {
   try {
+    if (!supabase) {
+      return NextResponse.json({ erro: 'Supabase não configurado' }, { status: 500 });
+    }
     const { userId } = await request.json();
     if (!userId) {
       return NextResponse.json({ erro: 'userId é obrigatório' }, { status: 400 });

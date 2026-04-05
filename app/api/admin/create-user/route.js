@@ -10,6 +10,10 @@ const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 export async function POST(request) {
   try {
+    if (!supabaseUrl || !anonKey) {
+      return NextResponse.json({ erro: 'Supabase não configurado' }, { status: 500 });
+    }
+
     const { name, email, role, password } = await request.json();
 
     if (!email || !name) {
