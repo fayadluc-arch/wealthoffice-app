@@ -1856,303 +1856,81 @@ Recomende a melhor decisão considerando cenário macro, mercado imobiliário lo
 // TAB 7: MERCADO IA
 // ============================================================
 function MercadoIATab({ imoveis }) {
-  const [subtab, setSubtab] = useState('fipezap');
+  const [subtab, setSubtab] = useState('cotacao');
   const [selectedId, setSelectedId] = useState('');
-  const [fzData, setFzData] = useState(null);
-  const [fzCidade, setFzCidade] = useState('');
-  const [fzTipo, setFzTipo] = useState('venda');
-  const [fzLoading, setFzLoading] = useState(false);
-  const [fiiData, setFiiData] = useState(null);
-  const [fiiLoading, setFiiLoading] = useState(false);
+  const [aiResult, setAiResult] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
   const im = imoveis.find(i => i.id === selectedId);
 
-  // Auto-detect most common city
-  useEffect(() => {
-    if (fzCidade) return;
-    const cities = {};
-    imoveis.forEach(i => { if (i.cidade) cities[i.cidade] = (cities[i.cidade] || 0) + 1; });
-    const top = Object.entries(cities).sort((a, b) => b[1] - a[1])[0];
-    if (top) setFzCidade(top[0]);
-    else setFzCidade('São Paulo');
-  }, [imoveis, fzCidade]);
+  async function runAnalysis(prompt, tipo) {
+    setAiResult(null);
+    setAiLoading(true);
+    try {
+      const res = await fetch('/api/gemini-analysis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, tipo }),
+      });
+      const data = await res.json();
+      if (data.erro) { setAiResult({ erro: data.erro }); }
+      else { setAiResult({ texto: data.resultado }); }
+    } catch (err) {
+      setAiResult({ erro: 'Erro de conexão' });
+    }
+    setAiLoading(false);
+  }
 
-  // Fetch FipeZap
-  useEffect(() => {
-    if (!fzCidade) return;
-    setFzLoading(true);
-    fetch(`/api/fipezap?cidade=${encodeURIComponent(fzCidade)}&tipo=${fzTipo}`)
-      .then(r => r.json())
-      .then(data => { if (!data.erro) setFzData(data); else setFzData(null); })
-      .catch(() => setFzData(null))
-      .finally(() => setFzLoading(false));
-  }, [fzCidade, fzTipo]);
+  // Simple markdown-to-HTML (bold, headers, tables, lists)
+  function renderMarkdown(text) {
+    if (!text) return null;
+    const lines = text.split('\n');
+    const html = [];
+    let inTable = false, tableRows = [];
+    const flushTable = () => {
+      if (!tableRows.length) return;
+      const headers = tableRows[0];
+      const rows = tableRows.slice(tableRows[1]?.every(c => /^[-|:]+$/.test(c.trim())) ? 2 : 1);
+      html.push(
+        <div key={html.length} style={{ overflowX: 'auto', marginBottom: 16 }}>
+          <table style={S.table}>
+            <thead><tr>{headers.map((h, i) => <th key={i} style={S.th}>{h.trim()}</th>)}</tr></thead>
+            <tbody>{rows.map((row, ri) => <tr key={ri}>{row.map((c, ci) => <td key={ci} style={S.td}>{c.trim()}</td>)}</tr>)}</tbody>
+          </table>
+        </div>
+      );
+      tableRows = [];
+    };
 
-  // Fetch FII benchmarks
-  useEffect(() => {
-    if (subtab !== 'benchmarkFii') return;
-    if (fiiData) return;
-    setFiiLoading(true);
-    fetch('/api/cvm-fii')
-      .then(r => r.json())
-      .then(data => { if (!data.erro) setFiiData(data); })
-      .catch(() => {})
-      .finally(() => setFiiLoading(false));
-  }, [subtab, fiiData]);
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (line.includes('|') && line.trim().startsWith('|')) {
+        const cells = line.split('|').filter((_, idx, arr) => idx > 0 && idx < arr.length - 1);
+        tableRows.push(cells);
+        inTable = true;
+        continue;
+      }
+      if (inTable) { flushTable(); inTable = false; }
+
+      if (line.startsWith('### ')) html.push(<div key={i} style={{ fontSize: 14, fontWeight: 700, marginTop: 20, marginBottom: 8, color: 'var(--text-primary)' }}>{line.substring(4)}</div>);
+      else if (line.startsWith('## ')) html.push(<div key={i} style={{ fontSize: 16, fontWeight: 700, marginTop: 24, marginBottom: 10, color: 'var(--accent)', fontFamily: 'var(--font-serif)' }}>{line.substring(3)}</div>);
+      else if (line.startsWith('# ')) html.push(<div key={i} style={{ fontSize: 18, fontWeight: 700, marginTop: 24, marginBottom: 12, color: 'var(--text-primary)', fontFamily: 'var(--font-serif)' }}>{line.substring(2)}</div>);
+      else if (line.startsWith('- ') || line.startsWith('* ')) html.push(<div key={i} style={{ paddingLeft: 16, marginBottom: 4, fontSize: 13, lineHeight: 1.7, color: 'var(--text-secondary)' }}>• {line.substring(2).replace(/\*\*(.+?)\*\*/g, '$1')}</div>);
+      else if (line.match(/^\d+\.\s/)) html.push(<div key={i} style={{ paddingLeft: 16, marginBottom: 4, fontSize: 13, lineHeight: 1.7, color: 'var(--text-secondary)' }}>{line.replace(/\*\*(.+?)\*\*/g, '$1')}</div>);
+      else if (line.trim()) html.push(<p key={i} style={{ fontSize: 13, lineHeight: 1.8, color: 'var(--text-secondary)', marginBottom: 8 }}>{line.replace(/\*\*(.+?)\*\*/g, '$1')}</p>);
+    }
+    if (inTable) flushTable();
+    return html;
+  }
 
   return (
     <div>
       <div style={S.subtabs}>
-        {['fipezap', 'benchmarkFii', 'cotacao', 'estudo', 'holding'].map(t => (
-          <button key={t} style={S.subtab(subtab === t)} onClick={() => setSubtab(t)}>
-            {{ fipezap: 'Índice FipeZap', benchmarkFii: 'Benchmark FII', cotacao: 'Cotação IA', estudo: 'Estudo Região', holding: 'Holding' }[t]}
+        {['cotacao', 'estudo', 'holding'].map(t => (
+          <button key={t} style={S.subtab(subtab === t)} onClick={() => { setSubtab(t); setAiResult(null); }}>
+            {{ cotacao: 'Cotação de Aluguel', estudo: 'Estudo de Região', holding: 'Holding & Tributação' }[t]}
           </button>
         ))}
       </div>
-
-      {/* FIPEZAP TAB */}
-      {subtab === 'fipezap' && (
-        <div style={S.card}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-            <div style={S.formSection}>Índice FipeZap — Preço R$/m²</div>
-            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-              <select style={{ ...S.select, width: 200 }} value={fzCidade} onChange={e => setFzCidade(e.target.value)}>
-                {fzData?.cidadesDisponiveis?.map(c => <option key={c} value={c}>{c}</option>)}
-                {!fzData?.cidadesDisponiveis && <option value={fzCidade}>{fzCidade}</option>}
-              </select>
-              <div style={{ display: 'flex', gap: 0, background: 'var(--bg-surface)', borderRadius: 8, border: '1px solid var(--border)', overflow: 'hidden' }}>
-                {['venda', 'locacao'].map(t => (
-                  <button key={t} onClick={() => setFzTipo(t)} style={{ padding: '6px 14px', fontSize: 12, fontWeight: fzTipo === t ? 700 : 400, background: fzTipo === t ? 'var(--accent)' : 'transparent', color: fzTipo === t ? '#fff' : 'var(--text-muted)', border: 'none', cursor: 'pointer' }}>
-                    {t === 'venda' ? 'Venda' : 'Locação'}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {fzLoading && <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>Carregando dados FipeZap...</div>}
-
-          {fzData && !fzLoading && (
-            <>
-              {/* KPI cards */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
-                {[
-                  { label: `R$/m² ${fzTipo === 'venda' ? 'Venda' : 'Aluguel'}`, value: fmtR(fzData.ultimoValor?.precoM2), color: '#60A5FA' },
-                  { label: 'Variação Mensal', value: `${fzData.variacao.mes > 0 ? '+' : ''}${fzData.variacao.mes.toFixed(2)}%`, color: fzData.variacao.mes >= 0 ? '#34D399' : '#F87171' },
-                  { label: 'Variação 12 Meses', value: `${fzData.variacao.ano > 0 ? '+' : ''}${fzData.variacao.ano.toFixed(2)}%`, color: fzData.variacao.ano >= 0 ? '#34D399' : '#F87171' },
-                  { label: 'Acumulado 5 Anos', value: `${fzData.variacao.acumulado5anos > 0 ? '+' : ''}${fzData.variacao.acumulado5anos.toFixed(1)}%`, color: fzData.variacao.acumulado5anos >= 0 ? '#34D399' : '#F87171' },
-                ].map(k => (
-                  <div key={k.label} style={{ background: 'var(--bg-surface)', borderRadius: 12, border: '1px solid var(--border)', padding: '16px 20px', textAlign: 'center' }}>
-                    <div style={{ fontSize: 24, fontWeight: 700, color: k.color, fontVariantNumeric: 'tabular-nums' }}>{k.value}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{k.label}</div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Portfolio comparison — only properties with valor_mercado AND area */}
-              {imoveis.length > 0 && fzData.ultimoValor?.precoM2 > 0 && (() => {
-                const comparaveis = imoveis.filter(i => Number(i.valor_mercado) > 0 && Number(i.area_m2) > 0);
-                if (!comparaveis.length) return null;
-                const totalArea = comparaveis.reduce((s, i) => s + Number(i.area_m2), 0);
-                const totalValor = comparaveis.reduce((s, i) => s + Number(i.valor_mercado), 0);
-                const portM2 = totalArea > 0 ? totalValor / totalArea : 0;
-                if (portM2 <= 0) return null;
-                const diff = ((portM2 / fzData.ultimoValor.precoM2) - 1) * 100;
-                const isAbove = diff > 0;
-                return (
-                  <div style={{ marginBottom: 24, padding: 16, background: 'linear-gradient(135deg, rgba(96,165,250,0.06) 0%, rgba(96,165,250,0.02) 100%)', borderRadius: 12, border: '1px solid rgba(96,165,250,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div>
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Seu Portfólio vs FipeZap ({fzData.cidade}) — {comparaveis.length} {comparaveis.length === 1 ? 'imóvel' : 'imóveis'} com valor</div>
-                      <div style={{ display: 'flex', gap: 24, alignItems: 'baseline' }}>
-                        <span style={{ fontSize: 18, fontWeight: 700 }}>{fmtR(portM2)}/m²</span>
-                        <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>vs {fmtR(fzData.ultimoValor.precoM2)}/m²</span>
-                      </div>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: 20, fontWeight: 700, color: Math.abs(diff) < 15 ? '#34D399' : isAbove ? '#FBBF24' : '#F87171' }}>
-                        {isAbove ? '+' : ''}{diff.toFixed(1)}%
-                      </div>
-                      <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{isAbove ? 'acima do mercado' : 'abaixo do mercado'}</div>
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* Historical chart (SVG line with gradient) */}
-              {fzData.historico && fzData.historico.length > 1 && (() => {
-                const h = fzData.historico;
-                const vals = h.map(p => p.precoM2);
-                const mn = Math.min(...vals) * 0.95;
-                const mx = Math.max(...vals) * 1.05;
-                const W = 700, H = 200, PAD = 40;
-                const toX = (i) => PAD + (i / (h.length - 1)) * (W - PAD * 2);
-                const toY = (v) => PAD / 2 + (H - PAD) - ((v - mn) / (mx - mn)) * (H - PAD);
-                const points = h.map((p, i) => `${toX(i)},${toY(p.precoM2)}`).join(' ');
-                const areaPoints = `${toX(0)},${H} ${points} ${toX(h.length - 1)},${H}`;
-                // Grid lines (5 horizontal)
-                const gridLines = Array.from({ length: 5 }, (_, i) => {
-                  const v = mn + ((mx - mn) / 4) * i;
-                  return { y: toY(v), label: Math.round(v).toLocaleString('pt-BR') };
-                });
-                // Date labels (show every 12 months)
-                const dateLabels = h.filter((_, i) => i === 0 || i === h.length - 1 || i % 12 === 0);
-                return (
-                  <div style={{ marginBottom: 24 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 12 }}>
-                      Evolução R$/m² — {fzData.cidade} ({fzTipo === 'venda' ? 'Venda' : 'Locação'})
-                    </div>
-                    <svg viewBox={`0 0 ${W} ${H + 30}`} width="100%" style={{ background: 'linear-gradient(180deg, var(--bg-surface) 0%, var(--bg-card) 100%)', borderRadius: 14, border: '1px solid var(--border)' }}>
-                      <defs>
-                        <linearGradient id="fzGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#60A5FA" stopOpacity="0.3" />
-                          <stop offset="100%" stopColor="#60A5FA" stopOpacity="0.02" />
-                        </linearGradient>
-                      </defs>
-                      {/* Grid lines */}
-                      {gridLines.map((g, i) => (
-                        <React.Fragment key={i}>
-                          <line x1={PAD} y1={g.y} x2={W - PAD} y2={g.y} stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
-                          <text x={PAD - 6} y={g.y + 3} fill="rgba(255,255,255,0.25)" fontSize="9" textAnchor="end">{g.label}</text>
-                        </React.Fragment>
-                      ))}
-                      {/* Area fill */}
-                      <polygon points={areaPoints} fill="url(#fzGrad)" />
-                      {/* Line */}
-                      <polyline points={points} fill="none" stroke="#60A5FA" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
-                      {/* Start and end dots */}
-                      <circle cx={toX(0)} cy={toY(h[0].precoM2)} r="4" fill="#60A5FA" stroke="var(--bg-card)" strokeWidth="2" />
-                      <circle cx={toX(h.length - 1)} cy={toY(h[h.length - 1].precoM2)} r="5" fill="#60A5FA" stroke="var(--bg-card)" strokeWidth="2" />
-                      {/* Value labels */}
-                      <text x={toX(0)} y={toY(h[0].precoM2) - 10} fill="#60A5FA" fontSize="11" fontWeight="600" textAnchor="start">{fmtR(h[0].precoM2)}</text>
-                      <text x={toX(h.length - 1)} y={toY(h[h.length - 1].precoM2) - 10} fill="#60A5FA" fontSize="11" fontWeight="700" textAnchor="end">{fmtR(h[h.length - 1].precoM2)}</text>
-                      {/* Date labels */}
-                      {dateLabels.map((d, i) => {
-                        const idx = h.indexOf(d);
-                        return <text key={i} x={toX(idx)} y={H + 18} fill="rgba(255,255,255,0.35)" fontSize="9" textAnchor="middle">{d.data}</text>;
-                      })}
-                    </svg>
-                  </div>
-                );
-              })()}
-
-              <div style={{ fontSize: 10, color: 'var(--text-muted)', textAlign: 'right' }}>
-                Fonte: Índice FipeZap · Ref: {fzData.ultimoValor?.data || '—'}
-              </div>
-            </>
-          )}
-
-          {!fzData && !fzLoading && (
-            <div style={S.emptyState}>Dados FipeZap não disponíveis para esta cidade.</div>
-          )}
-        </div>
-      )}
-
-      {/* FII BENCHMARK TAB */}
-      {subtab === 'benchmarkFii' && (
-        <div style={S.card}>
-          <div style={S.formSection}>Benchmark FII — Fundos Imobiliários (CVM)</div>
-
-          {fiiLoading && <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>Carregando dados CVM FII...</div>}
-
-          {fiiData && !fiiLoading && (
-            <>
-              {/* KPI row */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
-                {[
-                  { label: 'Total FIIs', value: fiiData.totalFundos, color: '#60A5FA' },
-                  { label: 'PL Total', value: fmtR(fiiData.plTotal), color: '#34D399' },
-                  { label: 'DY Médio (anual)', value: fmtPct(fiiData.dividendYieldMedio), color: '#FBBF24' },
-                  { label: 'Referência', value: fiiData.referencia || '—', color: 'var(--text-primary)' },
-                ].map(k => (
-                  <div key={k.label} style={{ background: 'var(--bg-surface)', borderRadius: 12, border: '1px solid var(--border)', padding: '16px 20px', textAlign: 'center' }}>
-                    <div style={{ fontSize: 22, fontWeight: 700, color: k.color, fontVariantNumeric: 'tabular-nums' }}>{k.value}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{k.label}</div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Your yield vs FII */}
-              {imoveis.length > 0 && (() => {
-                const pat = imoveis.reduce((s, i) => s + (i.valor_mercado || i.custo_aquisicao || 0), 0);
-                const noiAnual = imoveis.reduce((s, i) => s + calcNOI(i), 0);
-                const seuYield = pat > 0 ? (noiAnual / pat) * 100 : 0;
-                return (
-                  <div style={{ marginBottom: 24, padding: 16, background: 'linear-gradient(135deg, rgba(167,139,250,0.06) 0%, rgba(167,139,250,0.02) 100%)', borderRadius: 12, border: '1px solid rgba(167,139,250,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div>
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Seu Yield vs Mercado FII</div>
-                      <div style={{ display: 'flex', gap: 24, alignItems: 'baseline' }}>
-                        <span style={{ fontSize: 18, fontWeight: 700, color: '#A78BFA' }}>Você: {fmtPct(seuYield)}</span>
-                        <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>FII Mercado: {fmtPct(fiiData.dividendYieldMedio)}</span>
-                      </div>
-                    </div>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: seuYield > fiiData.dividendYieldMedio ? '#34D399' : '#F87171' }}>
-                      {seuYield > fiiData.dividendYieldMedio ? 'Acima' : 'Abaixo'} do mercado
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* Segments table */}
-              {fiiData.segmentos && fiiData.segmentos.length > 0 && (
-                <div style={{ marginBottom: 24 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Por Segmento</div>
-                  <div style={{ overflowX: 'auto' }}>
-                    <table style={S.table}>
-                      <thead><tr>
-                        {['Segmento', 'Fundos', 'PL Total', 'DY Médio'].map(h => <th key={h} style={S.th}>{h}</th>)}
-                      </tr></thead>
-                      <tbody>
-                        {fiiData.segmentos.map(s => (
-                          <tr key={s.nome}>
-                            <td style={{ ...S.td, fontWeight: 600 }}>{s.nome}</td>
-                            <td style={S.td}>{s.fundos}</td>
-                            <td style={{ ...S.td, fontVariantNumeric: 'tabular-nums' }}>{fmtR(s.pl)}</td>
-                            <td style={{ ...S.td, color: '#FBBF24', fontWeight: 600 }}>{fmtPct(s.yieldMed)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              {/* Top funds */}
-              {fiiData.topFundos && fiiData.topFundos.length > 0 && (
-                <details>
-                  <summary style={{ fontSize: 13, color: 'var(--accent)', cursor: 'pointer', fontWeight: 600, marginBottom: 12 }}>
-                    Top {fiiData.topFundos.length} FIIs por PL
-                  </summary>
-                  <div style={{ overflowX: 'auto' }}>
-                    <table style={S.table}>
-                      <thead><tr>
-                        {['Fundo', 'Segmento', 'PL', 'Distribuição/mês', 'DY Mês'].map(h => <th key={h} style={S.th}>{h}</th>)}
-                      </tr></thead>
-                      <tbody>
-                        {fiiData.topFundos.map(f => (
-                          <tr key={f.cnpj}>
-                            <td style={{ ...S.td, fontWeight: 600, maxWidth: 250, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.nome}</td>
-                            <td style={S.td}><span style={S.badge('#60A5FA')}>{f.segmento}</span></td>
-                            <td style={{ ...S.td, fontVariantNumeric: 'tabular-nums' }}>{fmtR(f.pl)}</td>
-                            <td style={{ ...S.td, fontVariantNumeric: 'tabular-nums' }}>{fmtR(f.distribuicaoMes)}</td>
-                            <td style={{ ...S.td, color: '#FBBF24', fontWeight: 600 }}>{fmtPct(f.yieldMes)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </details>
-              )}
-
-              <div style={{ fontSize: 10, color: 'var(--text-muted)', textAlign: 'right', marginTop: 16 }}>
-                Fonte: CVM Dados Abertos · Ref: {fiiData.referencia}
-              </div>
-            </>
-          )}
-
-          {!fiiData && !fiiLoading && (
-            <div style={S.emptyState}>Dados CVM FII não disponíveis no momento.</div>
-          )}
-        </div>
-      )}
 
       {(subtab === 'cotacao' || subtab === 'estudo') && (
         <div style={{ marginBottom: 20 }}>
@@ -2170,12 +1948,12 @@ function MercadoIATab({ imoveis }) {
           <p style={{ color: 'var(--text-secondary)', marginBottom: 24, lineHeight: 1.7 }}>
             Análise de aluguel por tipologia, R$/m², yield esperado e tendência 12 meses para a região.
           </p>
-          <button style={S.btn('primary')} onClick={() => {
+          <button style={S.btn('primary')} disabled={aiLoading} onClick={() => {
             const loc = im ? `${im.bairro || ''}, ${im.cidade || ''}/${im.uf || 'SP'}` : 'São Paulo/SP';
             const tipo = im ? im.tipo : 'Apartamento';
-            if (window.sendPrompt) window.sendPrompt(`Pesquise cotações de aluguel de mercado para a região de ${loc}. Tipologia: ${tipo}. ${im ? `Área: ${im.area_m2}m². Padrão: ${im.padrao}.` : ''} Apresente em tabela: Tipologia | Faixa de Aluguel | R$/m² | Yield esperado | Tendência 12m. Compare com o aluguel atual ${im ? fmtR(im.aluguel) : 'do mercado'} e indique se está acima/abaixo do mercado.`);
+            runAnalysis(`Pesquise cotações de aluguel de mercado para a região de ${loc}. Tipologia: ${tipo}. ${im ? `Área: ${im.area_m2}m². Padrão: ${im.padrao}.` : ''} Apresente em tabela: Tipologia | Faixa de Aluguel | R$/m² | Yield esperado | Tendência 12m. Compare com o aluguel atual ${im ? fmtR(im.aluguel) : 'do mercado'} e indique se está acima/abaixo do mercado.`, 'cotacao');
           }}>
-            {Icons.brain} Buscar Cotações IA
+            {aiLoading && subtab === 'cotacao' ? 'Analisando...' : 'Buscar Cotações IA'}
           </button>
         </div>
       )}
@@ -2186,11 +1964,11 @@ function MercadoIATab({ imoveis }) {
           <p style={{ color: 'var(--text-secondary)', marginBottom: 24, lineHeight: 1.7 }}>
             Análise institucional completa: tese de investimento, indicadores socioeconômicos, infraestrutura, riscos e recomendação.
           </p>
-          <button style={S.btn('primary')} onClick={() => {
+          <button style={S.btn('primary')} disabled={aiLoading} onClick={() => {
             const loc = im ? `${im.bairro || ''}, ${im.cidade || ''}/${im.uf || 'SP'}` : 'São Paulo/SP';
-            if (window.sendPrompt) window.sendPrompt(`Elabore um estudo de região nível JLL/CBRE para ${loc}. Inclua: 1) Tese de investimento (bull/bear case), 2) Indicadores socioeconômicos (renda média, crescimento populacional, IDH), 3) Infraestrutura e mobilidade, 4) Estoque e absorção do mercado imobiliário, 5) Pipeline de novos empreendimentos, 6) Oportunidades e riscos, 7) Recomendação final com score de atratividade (1-10).`);
+            runAnalysis(`Elabore um estudo de região nível JLL/CBRE para ${loc}. Inclua: 1) Tese de investimento (bull/bear case), 2) Indicadores socioeconômicos (renda média, crescimento populacional, IDH), 3) Infraestrutura e mobilidade, 4) Estoque e absorção do mercado imobiliário, 5) Pipeline de novos empreendimentos, 6) Oportunidades e riscos, 7) Recomendação final com score de atratividade (1-10).`, 'estudo');
           }}>
-            {Icons.brain} Gerar Estudo de Região
+            {aiLoading && subtab === 'estudo' ? 'Analisando...' : 'Gerar Estudo de Região'}
           </button>
         </div>
       )}
@@ -2222,20 +2000,38 @@ function MercadoIATab({ imoveis }) {
                     <div style={{ fontSize: 20, fontWeight: 700 }}>{pf} / {pj}</div>
                   </div>
                 </div>
-                <button style={S.btn('primary')} onClick={() => {
-                  if (window.sendPrompt) window.sendPrompt(`Análise tributária completa do portfólio imobiliário:
+                <button style={S.btn('primary')} disabled={aiLoading} onClick={() => {
+                  runAnalysis(`Análise tributária completa do portfólio imobiliário:
 - ${imoveis.length} imóveis, patrimônio total ${fmtR(totalPat)}
 - Receita mensal de aluguéis: ${fmtR(totalAluguel)} (${fmtR(totalAluguel * 12)}/ano)
 - ${pf} imóveis em PF, ${pj} em estrutura PJ
 - Imóveis PF: ${imoveis.filter(i => i.titular === 'PF').map(i => `${i.nome || i.logradouro}: ${fmtR(i.aluguel)}/mês`).join('; ')}
 
-Compare: 1) IRPF sobre aluguéis (tabela progressiva), 2) Lucro Presumido PJ (32% presunção, ~11.33% carga), 3) ITCMD na sucessão (4-8% conforme UF), 4) Blindagem patrimonial, 5) Custo de manutenção da holding (contabilidade, CNPJ), 6) Payback fiscal (quando a economia cobre o custo), 7) Próximos passos recomendados.`);
+Compare: 1) IRPF sobre aluguéis (tabela progressiva), 2) Lucro Presumido PJ (32% presunção, ~11.33% carga), 3) ITCMD na sucessão (4-8% conforme UF), 4) Blindagem patrimonial, 5) Custo de manutenção da holding (contabilidade, CNPJ), 6) Payback fiscal (quando a economia cobre o custo), 7) Próximos passos recomendados.`, 'holding');
                 }}>
-                  {Icons.brain} Análise Holding & Tributação IA
+                  {aiLoading && subtab === 'holding' ? 'Analisando...' : 'Análise Holding & Tributação IA'}
                 </button>
               </div>
             );
           })()}
+        </div>
+      )}
+
+      {/* AI Result display */}
+      {aiLoading && (
+        <div style={{ ...S.card, textAlign: 'center', padding: 40 }}>
+          <div style={{ width: 32, height: 32, border: '3px solid rgba(96,165,250,0.3)', borderTopColor: '#60A5FA', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 16px' }} />
+          <div style={{ color: 'var(--text-muted)', fontSize: 14 }}>Gerando análise com IA + busca web...</div>
+          <div style={{ color: 'var(--text-muted)', fontSize: 11, marginTop: 8 }}>Isso pode levar até 30 segundos</div>
+        </div>
+      )}
+      {aiResult && !aiLoading && (
+        <div style={S.card}>
+          {aiResult.erro ? (
+            <div style={{ color: '#F87171', fontSize: 14 }}>{aiResult.erro}</div>
+          ) : (
+            <div>{renderMarkdown(aiResult.texto)}</div>
+          )}
         </div>
       )}
     </div>
