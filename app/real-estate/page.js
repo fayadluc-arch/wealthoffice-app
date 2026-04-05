@@ -483,10 +483,13 @@ function DashboardTab({ imoveis, autoEstimating, onResetEstimates, isAdmin }) {
 // ============================================================
 // TAB 2: CADASTRO DE ATIVO
 // ============================================================
-function CadastroTab({ imoveis, onSave, onEdit, onDelete, user }) {
+function CadastroTab({ imoveis, onSave, onEdit, onDelete, user, draftForm, setDraftForm, draftEditingId, setDraftEditingId }) {
   const [subtab, setSubtab] = useState('novo');
-  const [form, setForm] = useState({ ...EMPTY_IMOVEL });
-  const [editingId, setEditingId] = useState(null);
+  // Use elevated state from parent to persist across tab switches
+  const form = draftForm || { ...EMPTY_IMOVEL };
+  const setForm = setDraftForm || (() => {});
+  const editingId = draftEditingId || null;
+  const setEditingId = setDraftEditingId || (() => {});
   const [cepStatus, setCepStatus] = useState(null); // null | 'loading' | 'ok' | 'error'
   const [saving, setSaving] = useState(false);
   const [estimating, setEstimating] = useState(false);
@@ -2995,7 +2998,7 @@ function RelatorioTab({ imoveis, recibos, manutencoes }) {
 // ============================================================
 // WRAPPER: Portfólio (Ativos + Contratos + DD)
 // ============================================================
-function PortfolioWrapper({ imoveis, onSave, onEdit, onDelete, user, ddItems, onSaveDD, onUpdateDD }) {
+function PortfolioWrapper({ imoveis, onSave, onEdit, onDelete, user, ddItems, onSaveDD, onUpdateDD, draftForm, setDraftForm, draftEditingId, setDraftEditingId }) {
   const [section, setSection] = useState('ativos');
   return (
     <div>
@@ -3008,7 +3011,7 @@ function PortfolioWrapper({ imoveis, onSave, onEdit, onDelete, user, ddItems, on
           <button key={s.id} style={S.subtab(section === s.id)} onClick={() => setSection(s.id)}>{s.label}</button>
         ))}
       </div>
-      {section === 'ativos' && <CadastroTab imoveis={imoveis} onSave={onSave} onEdit={onEdit} onDelete={onDelete} user={user} />}
+      {section === 'ativos' && <CadastroTab imoveis={imoveis} onSave={onSave} onEdit={onEdit} onDelete={onDelete} user={user} draftForm={draftForm} setDraftForm={setDraftForm} draftEditingId={draftEditingId} setDraftEditingId={setDraftEditingId} />}
       {section === 'contratos' && <LeaseManagementTab imoveis={imoveis} />}
       {section === 'dd' && <DDTrackerTab imoveis={imoveis} ddItems={ddItems} onSaveDD={onSaveDD} onUpdateDD={onUpdateDD} />}
     </div>
@@ -3407,10 +3410,119 @@ function ValuationWrapper({ imoveis }) {
 // ============================================================
 // MAIN PAGE COMPONENT
 // ============================================================
+// ============================================================
+// ADMIN TAB — User Management + Demo Seed
+// ============================================================
+function AdminTab({ clients, user, onRefresh }) {
+  const [seedLoading, setSeedLoading] = useState(false);
+  const [seedResult, setSeedResult] = useState(null);
+  const [newUserEmail, setNewUserEmail] = useState('');
+  const [newUserName, setNewUserName] = useState('');
+  const [newUserRole, setNewUserRole] = useState('client');
+  const [creating, setCreating] = useState(false);
+
+  async function seedDemo(userId) {
+    setSeedLoading(true);
+    setSeedResult(null);
+    try {
+      const res = await fetch('/api/seed-demo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      });
+      const data = await res.json();
+      setSeedResult(data.sucesso ? `${data.inseridos} imóveis demo inseridos!` : `Erro: ${data.erro}`);
+      if (data.sucesso) await onRefresh();
+    } catch (err) { setSeedResult('Erro de conexão'); }
+    setSeedLoading(false);
+  }
+
+  async function createUser() {
+    if (!newUserEmail || !newUserName) return;
+    setCreating(true);
+    try {
+      // Update profile if user exists, or show instructions
+      const { error } = await supabase.from('profiles').upsert({
+        id: crypto.randomUUID(), // placeholder — real user needs to register via auth
+        email: newUserEmail,
+        name: newUserName,
+        role: newUserRole,
+      }, { onConflict: 'email' });
+      if (error) {
+        alert('Para adicionar um novo usuário: 1) Peça ao usuário criar conta em wealthoffice.com.br, 2) Depois mude o role para "client" aqui.\n\nErro: ' + error.message);
+      } else {
+        setNewUserEmail('');
+        setNewUserName('');
+        await onRefresh();
+      }
+    } catch (err) { alert('Erro: ' + err.message); }
+    setCreating(false);
+  }
+
+  return (
+    <div>
+      {/* Users List */}
+      <div style={S.card}>
+        <div style={S.formSection}>Usuários Cadastrados</div>
+        {clients.length === 0 ? (
+          <div style={S.emptyState}>Nenhum cliente cadastrado. Peça ao usuário criar conta no site.</div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={S.table}>
+              <thead><tr>
+                {['Nome', 'Email', 'Role', 'Criado em', 'Ações'].map(h => <th key={h} style={S.th}>{h}</th>)}
+              </tr></thead>
+              <tbody>
+                {clients.map(c => (
+                  <tr key={c.id}>
+                    <td style={{ ...S.td, fontWeight: 600 }}>{c.name || '—'}</td>
+                    <td style={S.td}>{c.email}</td>
+                    <td style={S.td}><span style={S.badge(c.role === 'admin' ? '#F87171' : '#60A5FA')}>{c.role || 'client'}</span></td>
+                    <td style={{ ...S.td, fontSize: 11, color: 'var(--text-muted)' }}>{c.created_at ? new Date(c.created_at).toLocaleDateString('pt-BR') : '—'}</td>
+                    <td style={S.td}>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button style={{ ...S.btn('primary'), padding: '5px 12px', fontSize: 11 }} disabled={seedLoading}
+                          onClick={() => seedDemo(c.id)}>
+                          {seedLoading ? '...' : 'Popular Demo'}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {seedResult && (
+          <div style={{ marginTop: 12, padding: 12, background: seedResult.includes('Erro') ? 'rgba(248,113,113,0.1)' : 'rgba(52,211,153,0.1)', borderRadius: 8, fontSize: 13, color: seedResult.includes('Erro') ? '#F87171' : '#34D399' }}>
+            {seedResult}
+          </div>
+        )}
+      </div>
+
+      {/* Seed demo for current user */}
+      <div style={S.card}>
+        <div style={S.formSection}>Dados de Demonstração</div>
+        <p style={{ color: 'var(--text-secondary)', marginBottom: 16, lineHeight: 1.7, fontSize: 13 }}>
+          Popula o portfólio com 10 imóveis realistas: apartamentos em SP (Itaim, Vila Mariana, Moema, Consolação),
+          laje corporativa na Faria Lima, galpão em Guarulhos, casa em Alphaville, terreno em Pinheiros,
+          sala no Brooklin, e apartamento em Copacabana/RJ. Inclui imóveis alugados, vagos, em construção e uso próprio.
+        </p>
+        <button style={S.btn('primary')} disabled={seedLoading} onClick={() => seedDemo(user.id)}>
+          {seedLoading ? 'Populando...' : 'Popular Minha Conta com Demo'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function RealEstatePage() {
   const [user, setUser] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [tab, setTab] = useState('dashboard');
+  // Draft form state elevated to preserve across tab switches
+  const [draftForm, setDraftForm] = useState({ ...EMPTY_IMOVEL });
+  const [draftEditingId, setDraftEditingId] = useState(null);
   const [imoveis, setImoveis] = useState([]);
   const [recibos, setRecibos] = useState([]);
   const [ocorrencias, setOcorrencias] = useState([]);
@@ -3611,6 +3723,7 @@ export default function RealEstatePage() {
     { id: 'valuation', label: 'Valuation', icon: Icons.chart },
     { id: 'pipeline', label: 'Pipeline', icon: Icons.pipeline },
     { id: 'relatorio', label: 'Relatório', icon: Icons.report },
+    ...(isAdmin ? [{ id: 'admin', label: 'Admin', icon: Icons.wrench }] : []),
   ];
 
   return (
@@ -3704,12 +3817,17 @@ export default function RealEstatePage() {
               autoEstimateRef.current.clear();
               await loadData();
             }} />}
-            {tab === 'portfolio' && <PortfolioWrapper imoveis={imoveis} onSave={saveImovel} onEdit={editImovel} onDelete={deleteImovel} user={user} ddItems={ddItems} onSaveDD={saveDD} onUpdateDD={updateDD} />}
+            {tab === 'portfolio' && <PortfolioWrapper imoveis={imoveis} onSave={saveImovel} onEdit={editImovel} onDelete={deleteImovel} user={user} ddItems={ddItems} onSaveDD={saveDD} onUpdateDD={updateDD} draftForm={draftForm} setDraftForm={setDraftForm} draftEditingId={draftEditingId} setDraftEditingId={setDraftEditingId} />}
             {tab === 'operacional' && <OperacionalTab imoveis={imoveis} recibos={recibos} ocorrencias={ocorrencias} manutencoes={manutencoes} onSaveRecibo={saveRecibo} onSaveOcorrencia={saveOcorrencia} onSaveManutencao={saveManutencao} onUpdateImovel={updateImovel} />}
             {tab === 'financeiro' && <FinanceiroWrapper imoveis={imoveis} dividas={dividas} manutencoes={manutencoes} />}
             {tab === 'valuation' && <ValuationWrapper imoveis={imoveis} />}
             {tab === 'pipeline' && <PipelineTab pipeline={pipeline} onSavePipeline={savePipeline} onUpdatePipeline={updatePipeline} onDeletePipeline={deletePipeline} />}
             {tab === 'relatorio' && <RelatorioTab imoveis={imoveis} recibos={recibos} manutencoes={manutencoes} />}
+            {tab === 'admin' && isAdmin && <AdminTab clients={clients} user={user} onRefresh={async () => {
+              const { data } = await supabase.from('profiles').select('*').eq('role', 'client').order('name');
+              setClients(data || []);
+              await loadData();
+            }} />}
           </>
         )}
       </main>
