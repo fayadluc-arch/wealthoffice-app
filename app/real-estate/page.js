@@ -279,7 +279,7 @@ function DashboardTab({ imoveis, autoEstimating, onResetEstimates, isAdmin }) {
       if (df !== null && df <= 90 && df > 0) list.push({ tipo: 'Contrato', msg: `${im.nome || im.logradouro || 'Imóvel'} — contrato vence em ${df}d`, color: '#F97316' });
       if (df !== null && df <= 0) list.push({ tipo: 'Contrato Vencido', msg: `${im.nome || im.logradouro || 'Imóvel'} — contrato vencido`, color: '#F87171' });
       const ltv = calcLTV(im);
-      if (ltv > 70) list.push({ tipo: 'LTV Alto', msg: `${im.nome || im.logradouro || 'Imóvel'} — LTV ${fmtPct(ltv)}`, color: '#F87171' });
+      if (ltv > 70) list.push({ tipo: 'Endividamento Alto', msg: `${im.nome || im.logradouro || 'Imóvel'} — Dívida/Valor ${fmtPct(ltv)}`, color: '#F87171' });
       const dr = diasProxReajuste(im);
       if (dr !== null && dr <= 60 && dr > 0) list.push({ tipo: 'Reajuste', msg: `${im.nome || im.logradouro || 'Imóvel'} — reajuste em ${dr}d`, color: '#60A5FA' });
     });
@@ -293,7 +293,7 @@ function DashboardTab({ imoveis, autoEstimating, onResetEstimates, isAdmin }) {
           { label: 'Receita Mensal', value: fmtR(totais.receitaMensal), color: '#34D399', accent: true },
           { label: 'Renda Líquida Anual', value: fmtR(totais.noiAnual), color: '#60A5FA' },
           { label: 'Patrimônio', value: fmtR(totais.patrimonio), sub: autoEstimating > 0 ? `Avaliando ${autoEstimating} imóveis...` : (isAdmin ? '_admin_reavalia' : null) },
-          { label: 'Yield Locados', value: fmtPct(totais.yieldPort), color: totais.yieldPort >= 6 ? '#34D399' : '#FBBF24' },
+          { label: 'Yield Alugados', value: fmtPct(totais.yieldPort), color: totais.yieldPort >= 6 ? '#34D399' : '#FBBF24' },
           { label: 'Vacância', value: fmtPct(totais.vacancia), color: totais.vacancia > 10 ? '#F87171' : '#34D399' },
         ].map(k => (
           <div key={k.label} style={S.kpiCard(k.accent)}>
@@ -339,7 +339,6 @@ function DashboardTab({ imoveis, autoEstimating, onResetEstimates, isAdmin }) {
           const emConstrucao = data.filter(i => i.estagio === 'Em Construção' || i.estagio === 'Na Planta').length;
           return [
             { label: 'Retorno s/ Capital', value: fmtPct(coc), color: coc >= 8 ? '#34D399' : '#FBBF24' },
-            { label: 'Payback Investimento', value: payback > 0 ? payback.toFixed(1) + ' anos' : '—', color: payback <= 10 ? '#34D399' : '#F87171' },
             { label: 'Valorização', value: fmtPct(valorizacao), color: valorizacao >= 0 ? '#34D399' : '#F87171' },
             { label: 'Em Construção', value: emConstrucao, color: emConstrucao > 0 ? '#60A5FA' : 'var(--text-primary)' },
           ].map(s => (
@@ -427,7 +426,7 @@ function DashboardTab({ imoveis, autoEstimating, onResetEstimates, isAdmin }) {
             <table style={S.table}>
               <thead>
                 <tr>
-                  {['Ativo', 'Tipo', 'Valor Mercado', 'Aluguel', 'Yield', 'LTV', 'Status', 'Alertas'].map(h => (
+                  {['Ativo', 'Tipo', 'Valor Mercado', 'Aluguel', 'Rentab.', 'Dív/Valor', 'Status', 'Alertas'].map(h => (
                     <th key={h} style={S.th}>{h}</th>
                   ))}
                 </tr>
@@ -441,7 +440,7 @@ function DashboardTab({ imoveis, autoEstimating, onResetEstimates, isAdmin }) {
                   const isEstimating = !im.valor_mercado && autoEstimating > 0;
                   const alerts = [];
                   if (im.inadimplente) alerts.push('Inadimpl.');
-                  if (ltv > 70) alerts.push('LTV>' + Math.round(ltv) + '%');
+                  if (ltv > 70) alerts.push('Dív>' + Math.round(ltv) + '%');
                   if (df !== null && df <= 90) alerts.push(df <= 0 ? 'Vencido' : df + 'd');
                   return (
                     <tr key={im.id} className="table-row-hover">
@@ -1227,7 +1226,7 @@ function CadastroTab({ imoveis, onSave, onEdit, onDelete, user, draftForm, setDr
                 <Field label="IPTU Anual" value={form.iptu_anual} onChange={v => upd('iptu_anual', v)} type="number" placeholder="R$" />
                 <Field label="Condomínio Mensal" value={form.condominio_mensal} onChange={v => upd('condominio_mensal', v)} type="number" placeholder="R$" />
                 <Field label="Seguro Anual" value={form.seguro_anual} onChange={v => upd('seguro_anual', v)} type="number" placeholder="R$" />
-                <Field label="CAPEX Pendente" value={form.capex_pendente} onChange={v => upd('capex_pendente', v)} type="number" placeholder="R$" />
+                <Field label="Investimento Pendente" value={form.capex_pendente} onChange={v => upd('capex_pendente', v)} type="number" placeholder="R$" />
               </div>
 
               {/* Notes */}
@@ -1586,7 +1585,7 @@ function OperacionalTab({ imoveis, recibos, ocorrencias, manutencoes, onSaveReci
       {subtab === 'manutencao' && (
         <div>
           <div style={S.card}>
-            <div style={S.formSection}>Registrar Manutenção / CAPEX</div>
+            <div style={S.formSection}>Registrar Manutenção / Investimento</div>
             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 2fr', gap: 16, marginBottom: 20 }}>
               <div>
                 <label style={S.label}>Imóvel</label>
@@ -1655,12 +1654,12 @@ function MotorFinanceiroTab({ imoveis }) {
       {subtab === 'noi' && (
         <div style={S.card}>
           <div style={S.formSection}>Renda Líquida por Ativo</div>
-          {imoveis.length === 0 ? <div style={S.emptyState}>Cadastre imóveis para ver o NOI</div> : (
+          {imoveis.length === 0 ? <div style={S.emptyState}>Cadastre imóveis para ver a renda líquida</div> : (
             <div style={{ overflowX: 'auto' }}>
               <table style={S.table}>
                 <thead>
                   <tr>
-                    {['Ativo', 'Aluguel Bruto', '(-) Vacância 5%', '(-) IPTU', '(-) Condo', '(-) Seguro', '(-) CAPEX', '(-) Adm', '(-) Manut 3%', '= NOI Mensal', '(-) Dívida', '= Fluxo Líquido'].map(h => (
+                    {['Ativo', 'Aluguel Bruto', '(-) Vacância 5%', '(-) IPTU', '(-) Condo', '(-) Seguro', '(-) Investim.', '(-) Adm', '(-) Manut 3%', '= Renda Líq. Mensal', '(-) Dívida', '= Fluxo Líquido'].map(h => (
                       <th key={h} style={S.th}>{h}</th>
                     ))}
                   </tr>
@@ -1715,7 +1714,7 @@ function MotorFinanceiroTab({ imoveis }) {
                 <tr>
                   <th style={S.th}>Ano</th>
                   <th style={S.th}>Receita Bruta</th>
-                  <th style={S.th}>NOI</th>
+                  <th style={S.th}>Renda Líq.</th>
                   <th style={S.th}>Serviço Dívida</th>
                   <th style={S.th}>Fluxo Livre</th>
                   <th style={S.th}>Fluxo Acum.</th>
@@ -1766,9 +1765,9 @@ function MotorFinanceiroTab({ imoveis }) {
                 { label: 'Patrimônio Bruto', value: fmtR(pat) },
                 { label: 'Equity (Pat - Dívida)', value: fmtR(equity), color: '#34D399' },
                 { label: 'Dívida Total', value: fmtR(divida), color: '#F87171' },
-                { label: 'LTV Portfólio', value: fmtPct(ltvPort), color: ltvPort > 70 ? '#F87171' : '#34D399' },
-                { label: 'Cap Rate', value: fmtPct(capRate), color: '#60A5FA', accent: true },
-                { label: 'Yield on Cost', value: fmtPct(yieldOnCost), color: '#A78BFA' },
+                { label: 'Endividamento', value: fmtPct(ltvPort), color: ltvPort > 70 ? '#F87171' : '#34D399' },
+                { label: 'Taxa de Capitalização', value: fmtPct(capRate), color: '#60A5FA', accent: true },
+                { label: 'Retorno s/ Custo', value: fmtPct(yieldOnCost), color: '#A78BFA' },
                 { label: 'Retorno s/ Patrimônio', value: fmtPct(roe), color: '#34D399' },
                 { label: 'Renda Líquida Anual', value: fmtR(noiTotal), color: '#34D399' },
               ].map(k => (
@@ -1801,7 +1800,7 @@ function ValuationTab({ imoveis }) {
       <div style={S.subtabs}>
         {['banda', 'renda', 'comparaveis'].map(t => (
           <button key={t} style={S.subtab(subtab === t)} onClick={() => setSubtab(t)}>
-            {{ banda: 'Banda de Valor', renda: 'Por Renda / Cap Rate', comparaveis: 'Comparáveis IA' }[t]}
+            {{ banda: 'Banda de Valor', renda: 'Por Renda / Taxa de Capitalização', comparaveis: 'Comparáveis IA' }[t]}
           </button>
         ))}
       </div>
@@ -1853,9 +1852,9 @@ function ValuationTab({ imoveis }) {
         <div style={S.card}>
           <div style={S.formSection}>Valuation por Renda — {im.nome || im.logradouro}</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 24 }}>
-            <Field label="Cap Rate %" value={capRate} onChange={v => setCapRate(v)} type="number" suffix="%" />
+            <Field label="Taxa de Capitalização %" value={capRate} onChange={v => setCapRate(v)} type="number" suffix="%" />
             <div>
-              <label style={S.label}>Renda Líquida (NOI)</label>
+              <label style={S.label}>Renda Líquida Anual</label>
               <div style={{ ...S.input, background: 'var(--bg-elevated)', fontWeight: 600 }}>{fmtR(calcNOI(im))}</div>
             </div>
           </div>
@@ -1871,7 +1870,7 @@ function ValuationTab({ imoveis }) {
                   <div style={S.kpiValue('#60A5FA')}>{fmtR(valorRenda)}</div>
                 </div>
                 <div style={{ ...S.kpiCard(), textAlign: 'center' }}>
-                  <div style={S.kpiLabel}>Yield on Cost</div>
+                  <div style={S.kpiLabel}>Retorno s/ Custo</div>
                   <div style={S.kpiValue('#A78BFA')}>{fmtPct(yieldOnCost)}</div>
                 </div>
                 <div style={{ ...S.kpiCard(), textAlign: 'center' }}>
@@ -1942,7 +1941,7 @@ function DecisaoTab({ imoveis }) {
     const vplReformar = calcVPL(fluxosReformar, tma);
 
     return [
-      { nome: 'Manter', vpl: vplManter, desc: `NOI crescendo 5% a.a. + venda em ${h} anos` },
+      { nome: 'Manter', vpl: vplManter, desc: `Renda crescendo 5% a.a. + venda em ${h} anos` },
       { nome: 'Vender Agora', vpl: vplVender, desc: `Venda líquida após IR (${params.igc}%) e custos (${params.custoTransacao}%)` },
       { nome: 'Reformar + Manter', vpl: vplReformar, desc: `Reforma de ${fmtR(custoRef)} → aluguel +${params.incrementoAluguel}%` },
     ].sort((a, b) => b.vpl - a.vpl);
@@ -2002,7 +2001,7 @@ function DecisaoTab({ imoveis }) {
               if (window.sendPrompt) window.sendPrompt(`Análise estratégica para o imóvel "${im.nome || im.logradouro}" em ${im.cidade}/${im.uf}:
 - Tipo: ${im.tipo}, Área: ${im.area_m2}m², Padrão: ${im.padrao}
 - Valor Mercado: ${fmtR(im.valor_mercado)}, Custo: ${fmtR(im.custo_aquisicao)}, Dívida: ${fmtR(im.divida)}
-- Aluguel: ${fmtR(im.aluguel)}, NOI: ${fmtR(calcNOI(im))}, Yield: ${fmtPct(calcYield(im))}
+- Aluguel: ${fmtR(im.aluguel)}, Renda Líq: ${fmtR(calcNOI(im))}, Rentab: ${fmtPct(calcYield(im))}
 - Cenários VPL (TMA ${params.tma}%): ${cenarios.map(c => `${c.nome}: ${fmtR(c.vpl)}`).join(', ')}
 Recomende a melhor decisão considerando cenário macro, mercado imobiliário local, oportunidade de reforma e timing de venda.`);
             }}>
@@ -2496,7 +2495,7 @@ function DebtScheduleTab({ imoveis, dividas }) {
               <div style={S.kpiValue('#FBBF24')}>{fmtR(resumo.totalParcela)}</div>
             </div>
             <div style={S.kpiCard()}>
-              <div style={S.kpiLabel}>LTV Médio</div>
+              <div style={S.kpiLabel}>Endividamento Médio</div>
               <div style={S.kpiValue(resumo.ltvMedio > 70 ? '#F87171' : '#34D399')}>{fmtPct(resumo.ltvMedio)}</div>
             </div>
             <div style={S.kpiCard()}>
@@ -2580,7 +2579,7 @@ function DDTrackerTab({ imoveis, ddItems, onSaveDD, onUpdateDD }) {
       <div style={S.card}>
         <div style={S.formSection}>Due Diligence — Progresso por Ativo</div>
         {imoveis.length === 0 ? (
-          <div style={S.emptyState}>Cadastre imóveis para iniciar o DD Tracker.</div>
+          <div style={S.emptyState}>Cadastre imóveis para iniciar o Checklist.</div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16, marginBottom: 24 }}>
             {allProgress.map(p => (
@@ -2713,7 +2712,7 @@ function CAPEXPlanningTab({ imoveis, manutencoes }) {
 
       {subtab === 'projecao' && (
         <div style={S.card}>
-          <div style={S.formSection}>Projeção CAPEX — 10 Anos</div>
+          <div style={S.formSection}>Projeção de Investimentos — 10 Anos</div>
           {projecao.rows.length === 0 ? (
             <div style={S.emptyState}>Cadastre imóveis com data de aquisição e área para gerar projeções.</div>
           ) : (
@@ -2756,7 +2755,7 @@ function CAPEXPlanningTab({ imoveis, manutencoes }) {
         <div>
           <div style={S.kpiGrid}>
             <div style={S.kpiCard(true)}>
-              <div style={S.kpiLabel}>CAPEX Total 10 Anos</div>
+              <div style={S.kpiLabel}>Investimento Total 10 Anos</div>
               <div style={S.kpiValue('#F87171')}>{fmtR(totalCapex10y)}</div>
             </div>
             <div style={S.kpiCard()}>
@@ -2875,7 +2874,7 @@ function PipelineTab({ pipeline, onSavePipeline, onUpdatePipeline, onDeletePipel
           </div>
           <div style={{ ...S.grid3, marginTop: 16 }}>
             <Field label="Valor (R$)" value={form.valor} onChange={v => setForm({ ...form, valor: v })} type="number" />
-            <Field label="Cap Rate (%)" value={form.cap_rate} onChange={v => setForm({ ...form, cap_rate: v })} type="number" />
+            <Field label="Taxa de Capitalização (%)" value={form.cap_rate} onChange={v => setForm({ ...form, cap_rate: v })} type="number" />
             <Field label="Estágio" value={form.estagio} onChange={v => setForm({ ...form, estagio: v })} options={PIPELINE_STAGES} />
           </div>
           <div style={{ marginTop: 16 }}>
@@ -2924,7 +2923,7 @@ function PipelineTab({ pipeline, onSavePipeline, onUpdatePipeline, onDeletePipel
                       <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>{d.nome}</div>
                       <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>{d.cidade}/{d.uf}</div>
                       {d.valor > 0 && <div style={{ fontSize: 13, fontWeight: 600, color: '#60A5FA', marginBottom: 4 }}>{fmtR(d.valor)}</div>}
-                      {d.cap_rate > 0 && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>Cap Rate: {fmtPct(d.cap_rate)}</div>}
+                      {d.cap_rate > 0 && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>Taxa de Capitalização: {fmtPct(d.cap_rate)}</div>}
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                         <span style={{ fontSize: 18, fontWeight: 800, color: scoreColor(score) }}>{score.toFixed(1)}</span>
                         <div style={{ display: 'flex', gap: 4 }}>
@@ -2947,7 +2946,7 @@ function PipelineTab({ pipeline, onSavePipeline, onUpdatePipeline, onDeletePipel
             <table style={S.table}>
               <thead><tr>
                 <th style={S.th}>Nome</th><th style={S.th}>Cidade</th><th style={S.th}>Valor</th>
-                <th style={S.th}>Cap Rate</th><th style={S.th}>Score</th><th style={S.th}>Estágio</th><th style={S.th}>Ações</th>
+                <th style={S.th}>Taxa de Capitalização</th><th style={S.th}>Score</th><th style={S.th}>Estágio</th><th style={S.th}>Ações</th>
               </tr></thead>
               <tbody>
                 {pipeline.map(d => {
@@ -3023,7 +3022,7 @@ function RelatorioTab({ imoveis, recibos, manutencoes }) {
       const d = diasFimContrato(im);
       if (d !== null && d <= 90 && d > 0) list.push({ msg: `${im.nome || im.logradouro} — contrato vence em ${d}d`, color: '#F97316' });
       const ltv = calcLTV(im);
-      if (ltv > 70) list.push({ msg: `${im.nome || im.logradouro} — LTV ${fmtPct(ltv)}`, color: '#F87171' });
+      if (ltv > 70) list.push({ msg: `${im.nome || im.logradouro} — Dívida/Valor ${fmtPct(ltv)}`, color: '#F87171' });
     });
     return list;
   }, [imoveis]);
@@ -3043,7 +3042,7 @@ function RelatorioTab({ imoveis, recibos, manutencoes }) {
         <div style={S.formSection}>Sumário Executivo</div>
         <p style={{ color: 'var(--text-secondary)', lineHeight: 1.8, fontSize: 14 }}>
           O portfólio conta com <strong>{imoveis.length} ativos</strong> totalizando <strong>{fmtR(metrics.patrimonio)}</strong> em valor de mercado.
-          A receita mensal de aluguéis é de <strong>{fmtR(metrics.receitaMensal)}</strong>, com NOI anualizado de <strong>{fmtR(metrics.noiAnual)}</strong>.
+          A receita mensal de aluguéis é de <strong>{fmtR(metrics.receitaMensal)}</strong>, com renda líquida anualizada de <strong>{fmtR(metrics.noiAnual)}</strong>.
           A taxa de ocupação está em <strong>{fmtPct(metrics.ocupacao)}</strong> com yield do portfólio de <strong>{fmtPct(metrics.yieldPort)}</strong>.
           {metrics.inadimplentes > 0 && ` Atenção: ${metrics.inadimplentes} imóvel(is) com inadimplência.`}
         </p>
@@ -3054,7 +3053,7 @@ function RelatorioTab({ imoveis, recibos, manutencoes }) {
         <div style={S.formSection}>Performance do Portfólio</div>
         <div style={S.kpiGrid}>
           <KPICompare label="Patrimônio" current={metrics.patrimonio} previous={metrics.prev.patrimonio} fmt={fmtR} />
-          <KPICompare label="Renda Líquida (NOI)" current={metrics.noiAnual} previous={metrics.prev.noiAnual} fmt={fmtR} />
+          <KPICompare label="Renda Líquida Anual" current={metrics.noiAnual} previous={metrics.prev.noiAnual} fmt={fmtR} />
           <KPICompare label="Receita Mensal" current={metrics.receitaMensal} previous={metrics.prev.receitaMensal} fmt={fmtR} />
           <KPICompare label="Yield" current={metrics.yieldPort} previous={metrics.prev.yieldPort} fmt={v => fmtPct(v)} />
           <KPICompare label="Ocupação" current={metrics.ocupacao} previous={metrics.prev.ocupacao} fmt={v => fmtPct(v)} />
@@ -3071,7 +3070,7 @@ function RelatorioTab({ imoveis, recibos, manutencoes }) {
             <table style={S.table}>
               <thead><tr>
                 <th style={S.th}>Imóvel</th><th style={S.th}>Receita Anual</th><th style={S.th}>Despesas</th>
-                <th style={S.th}>NOI</th><th style={S.th}>Yield</th>
+                <th style={S.th}>Renda Líq.</th><th style={S.th}>Rentab.</th>
               </tr></thead>
               <tbody>
                 {imoveis.map(im => {
@@ -3128,7 +3127,7 @@ function RelatorioTab({ imoveis, recibos, manutencoes }) {
       <div style={S.grid2}>
         <div style={S.card}>
           <div style={S.formSection}>CAPEX Summary</div>
-          <div style={S.kpiLabel}>CAPEX Pendente</div>
+          <div style={S.kpiLabel}>Investimento Pendente</div>
           <div style={S.kpiValue('#FBBF24')}>{fmtR(metrics.capexPendente)}</div>
           <div style={{ ...S.kpiSub, marginTop: 8 }}>Manutenções realizadas: {fmtR(metrics.totalManut)}</div>
         </div>
@@ -3136,7 +3135,7 @@ function RelatorioTab({ imoveis, recibos, manutencoes }) {
           <div style={S.formSection}>Debt Overview</div>
           <div style={S.kpiLabel}>Dívida Total</div>
           <div style={S.kpiValue('#F87171')}>{fmtR(metrics.totalDivida)}</div>
-          <div style={{ ...S.kpiSub, marginTop: 8 }}>LTV Médio: {fmtPct(metrics.ltvMedio)}</div>
+          <div style={{ ...S.kpiSub, marginTop: 8 }}>Endividamento Médio: {fmtPct(metrics.ltvMedio)}</div>
         </div>
       </div>
 
@@ -3166,7 +3165,7 @@ function PortfolioWrapper({ imoveis, onSave, onEdit, onDelete, user, ddItems, on
         {[
           { id: 'ativos', label: 'Ativos' },
           { id: 'contratos', label: 'Contratos' },
-          { id: 'dd', label: 'DD Tracker' },
+          { id: 'dd', label: 'Checklist' },
         ].map(s => (
           <button key={s.id} style={S.subtab(section === s.id)} onClick={() => setSection(s.id)}>{s.label}</button>
         ))}
