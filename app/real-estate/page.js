@@ -1948,23 +1948,30 @@ function MercadoIATab({ imoveis }) {
                 ))}
               </div>
 
-              {/* Portfolio comparison */}
+              {/* Portfolio comparison — only properties with valor_mercado AND area */}
               {imoveis.length > 0 && fzData.ultimoValor?.precoM2 > 0 && (() => {
-                const totalArea = imoveis.reduce((s, i) => s + (Number(i.area_m2) || 0), 0);
-                const totalValor = imoveis.reduce((s, i) => s + (Number(i.valor_mercado) || 0), 0);
+                const comparaveis = imoveis.filter(i => Number(i.valor_mercado) > 0 && Number(i.area_m2) > 0);
+                if (!comparaveis.length) return null;
+                const totalArea = comparaveis.reduce((s, i) => s + Number(i.area_m2), 0);
+                const totalValor = comparaveis.reduce((s, i) => s + Number(i.valor_mercado), 0);
                 const portM2 = totalArea > 0 ? totalValor / totalArea : 0;
-                const diff = portM2 > 0 ? ((portM2 / fzData.ultimoValor.precoM2) - 1) * 100 : 0;
+                if (portM2 <= 0) return null;
+                const diff = ((portM2 / fzData.ultimoValor.precoM2) - 1) * 100;
+                const isAbove = diff > 0;
                 return (
                   <div style={{ marginBottom: 24, padding: 16, background: 'linear-gradient(135deg, rgba(96,165,250,0.06) 0%, rgba(96,165,250,0.02) 100%)', borderRadius: 12, border: '1px solid rgba(96,165,250,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <div>
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Seu Portfólio vs FipeZap ({fzData.cidade})</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Seu Portfólio vs FipeZap ({fzData.cidade}) — {comparaveis.length} {comparaveis.length === 1 ? 'imóvel' : 'imóveis'} com valor</div>
                       <div style={{ display: 'flex', gap: 24, alignItems: 'baseline' }}>
                         <span style={{ fontSize: 18, fontWeight: 700 }}>{fmtR(portM2)}/m²</span>
                         <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>vs {fmtR(fzData.ultimoValor.precoM2)}/m²</span>
                       </div>
                     </div>
-                    <div style={{ fontSize: 20, fontWeight: 700, color: Math.abs(diff) < 10 ? '#34D399' : '#FBBF24' }}>
-                      {diff > 0 ? '+' : ''}{diff.toFixed(1)}%
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: 20, fontWeight: 700, color: Math.abs(diff) < 15 ? '#34D399' : isAbove ? '#FBBF24' : '#F87171' }}>
+                        {isAbove ? '+' : ''}{diff.toFixed(1)}%
+                      </div>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{isAbove ? 'acima do mercado' : 'abaixo do mercado'}</div>
                     </div>
                   </div>
                 );
