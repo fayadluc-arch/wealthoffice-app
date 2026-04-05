@@ -3441,21 +3441,21 @@ function AdminTab({ clients, user, onRefresh }) {
     if (!newUserEmail || !newUserName) return;
     setCreating(true);
     try {
-      // Update profile if user exists, or show instructions
-      const { error } = await supabase.from('profiles').upsert({
-        id: crypto.randomUUID(), // placeholder — real user needs to register via auth
-        email: newUserEmail,
-        name: newUserName,
-        role: newUserRole,
-      }, { onConflict: 'email' });
-      if (error) {
-        alert('Para adicionar um novo usuário: 1) Peça ao usuário criar conta em wealthoffice.com.br, 2) Depois mude o role para "client" aqui.\n\nErro: ' + error.message);
-      } else {
+      const res = await fetch('/api/admin/create-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newUserName, email: newUserEmail, role: newUserRole }),
+      });
+      const data = await res.json();
+      if (data.sucesso) {
+        alert(`Usuário criado!\n\nEmail: ${data.email}\nSenha temporária: ${data.senhaTemporaria}\n\nGuarde essa senha para enviar ao cliente.`);
         setNewUserEmail('');
         setNewUserName('');
         await onRefresh();
+      } else {
+        alert('Erro: ' + (data.erro || 'Falha ao criar usuário'));
       }
-    } catch (err) { alert('Erro: ' + err.message); }
+    } catch (err) { alert('Erro de conexão: ' + err.message); }
     setCreating(false);
   }
 
