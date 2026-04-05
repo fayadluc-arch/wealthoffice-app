@@ -1194,7 +1194,100 @@ function DashboardTab({ precatorios, onNavigate, isAdmin, onBatchUpdate }) {
           </table>
         </div>
       </div>
+
+      {/* FIDC Benchmark — Precatórios Market */}
+      <FIDCBenchmarkSection />
     </>
+  );
+}
+
+function FIDCBenchmarkSection() {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/cvm-fidc')
+      .then(r => r.json())
+      .then(d => { if (!d.erro) setData(d); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return (
+    <div style={S.card}>
+      <div style={S.formSection}>Benchmark FIDC Precatórios (CVM)</div>
+      <div style={{ textAlign: 'center', padding: 30, color: 'var(--text-muted)', fontSize: 13 }}>Carregando dados CVM...</div>
+    </div>
+  );
+  if (!data || !data.totalFundos) return null;
+
+  return (
+    <div style={S.card}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+        <div style={S.formSection}>Benchmark FIDC Precatórios (CVM)</div>
+        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Ref: {data.referencia || '—'} · dados.cvm.gov.br</span>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
+        {[
+          { label: 'Fundos Ativos', value: data.totalFundos, color: 'var(--accent-light)' },
+          { label: 'PL Total Mercado', value: fmtBRL(data.plTotal), color: '#34D399' },
+          { label: 'PL Médio', value: fmtBRL(data.plMedio), color: '#60A5FA' },
+          { label: 'Total Cotistas', value: (data.cotistasTotal || 0).toLocaleString('pt-BR'), color: '#FBBF24' },
+        ].map(k => (
+          <div key={k.label} style={{ background: 'var(--bg-surface)', borderRadius: 12, border: '1px solid var(--border)', padding: '16px 20px', textAlign: 'center' }}>
+            <div style={{ fontSize: 22, fontWeight: 700, color: k.color, fontVariantNumeric: 'tabular-nums' }}>{k.value}</div>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{k.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Historical bar chart */}
+      {data.historico && data.historico.length > 1 && (() => {
+        const h = data.historico;
+        const maxPL = Math.max(...h.map(m => m.plTotal));
+        return (
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 12 }}>Evolução PL Total (6 meses)</div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', height: 100 }}>
+              {h.map(m => (
+                <div key={m.mes} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                  <div style={{ fontSize: 9, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>{fmtBRL(m.plTotal)}</div>
+                  <div style={{ width: '100%', background: 'var(--accent)', borderRadius: 4, height: `${maxPL > 0 ? (m.plTotal / maxPL) * 60 : 0}px`, minHeight: 4, transition: 'height 0.3s' }} />
+                  <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>{m.mes.substring(4)}/{m.mes.substring(2, 4)}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Top funds table */}
+      {data.fundos && data.fundos.length > 0 && (
+        <details>
+          <summary style={{ fontSize: 12, color: 'var(--accent)', cursor: 'pointer', fontWeight: 600, marginBottom: 10 }}>
+            Top {Math.min(data.fundos.length, 10)} FIDCs de Precatórios por PL
+          </summary>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={S.table}>
+              <thead><tr>
+                {['Fundo', 'CNPJ', 'PL', 'Cotistas'].map(h => <th key={h} style={S.th()}>{h}</th>)}
+              </tr></thead>
+              <tbody>
+                {data.fundos.slice(0, 10).map((f, i) => (
+                  <tr key={i}>
+                    <td style={{ ...S.td, fontWeight: 600, maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.nome}</td>
+                    <td style={{ ...S.td, fontSize: 11, color: 'var(--text-muted)' }}>{f.cnpj}</td>
+                    <td style={{ ...S.td, fontVariantNumeric: 'tabular-nums' }}>{fmtBRL(f.pl)}</td>
+                    <td style={S.td}>{f.cotistas}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      )}
+    </div>
   );
 }
 

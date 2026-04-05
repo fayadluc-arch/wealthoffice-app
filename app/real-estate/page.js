@@ -290,7 +290,7 @@ function DashboardTab({ imoveis, autoEstimating, onResetEstimates, isAdmin }) {
       <div style={S.kpiGrid}>
         {[
           { label: 'Receita Mensal', value: fmtR(totais.receitaMensal), color: '#34D399', accent: true },
-          { label: 'NOI Anual', value: fmtR(totais.noiAnual), color: '#60A5FA' },
+          { label: 'Renda Líquida (NOI)', value: fmtR(totais.noiAnual), color: '#60A5FA' },
           { label: 'Patrimônio', value: fmtR(totais.patrimonio), sub: autoEstimating > 0 ? `Avaliando ${autoEstimating} imóveis...` : (isAdmin ? '_admin_reavalia' : null) },
           { label: 'Yield Portfólio', value: fmtPct(totais.yieldPort), color: totais.yieldPort >= 6 ? '#34D399' : '#FBBF24' },
           { label: 'Vacância', value: fmtPct(totais.vacancia), color: totais.vacancia > 10 ? '#F87171' : '#34D399' },
@@ -337,7 +337,7 @@ function DashboardTab({ imoveis, autoEstimating, onResetEstimates, isAdmin }) {
           const valorizacao = custoTotal > 0 ? ((patrimonio - custoTotal) / custoTotal) * 100 : 0;
           const emConstrucao = data.filter(i => i.estagio === 'Em Construção' || i.estagio === 'Na Planta').length;
           return [
-            { label: 'Cash-on-Cash', value: fmtPct(coc), color: coc >= 8 ? '#34D399' : '#FBBF24' },
+            { label: 'Retorno s/ Capital', value: fmtPct(coc), color: coc >= 8 ? '#34D399' : '#FBBF24' },
             { label: 'Payback', value: payback > 0 ? payback.toFixed(1) + ' anos' : '—', color: payback <= 10 ? '#34D399' : '#F87171' },
             { label: 'Valorização', value: fmtPct(valorizacao), color: valorizacao >= 0 ? '#34D399' : '#F87171' },
             { label: 'Em Construção', value: emConstrucao, color: emConstrucao > 0 ? '#60A5FA' : 'var(--text-primary)' },
@@ -363,6 +363,58 @@ function DashboardTab({ imoveis, autoEstimating, onResetEstimates, isAdmin }) {
           ))}
         </div>
       )}
+
+      {/* Oportunidades de Receita — imóveis vagos */}
+      {(() => {
+        const vagos = imoveis.filter(i => i.status === 'Vago');
+        if (!vagos.length) return null;
+        return (
+          <div style={S.card}>
+            <div style={S.formSection}>Oportunidades de Receita — {vagos.length} {vagos.length === 1 ? 'imóvel vago' : 'imóveis vagos'}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>
+              Estimativa de aluguel baseada no FipeZap e dados de mercado da região.
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {vagos.map(im => {
+                const area = Number(im.area_m2) || 70;
+                const vm = im.valor_mercado || im.custo_aquisicao || 0;
+                // Estimate: typical yield 5-7% for residential, 8-10% for commercial
+                const isComercial = im.tipo === 'Laje Corporativa' || im.tipo === 'Galpão' || im.tipo === 'Varejo' || im.uso === 'Comercial';
+                const yieldEstimado = isComercial ? 0.085 : 0.06;
+                const aluguelEstimado = vm > 0 ? (vm * yieldEstimado) / 12 : area * (isComercial ? 80 : 45);
+                const m2Aluguel = area > 0 ? aluguelEstimado / area : 0;
+                return (
+                  <div key={im.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', background: 'linear-gradient(135deg, rgba(251,191,36,0.06) 0%, rgba(251,191,36,0.02) 100%)', borderRadius: 12, border: '1px solid rgba(251,191,36,0.15)' }}>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 14 }}>{im.nome || im.logradouro || '—'}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                        {im.tipo} · {area}m² · {im.bairro || im.cidade}/{im.uf}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Aluguel Estimado</div>
+                        <div style={{ fontSize: 16, fontWeight: 700, color: '#FBBF24' }}>{fmtR(aluguelEstimado)}/mês</div>
+                      </div>
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>R$/m²</div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: '#60A5FA' }}>{fmtR(m2Aluguel)}</div>
+                      </div>
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Yield {isComercial ? 'Comercial' : 'Residencial'}</div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: '#34D399' }}>{fmtPct(yieldEstimado * 100)}</div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                Estimativas baseadas em yields de mercado ({'\u2248'}6% residencial, {'\u2248'}8,5% comercial). Use o Mercado IA para cotações mais precisas.
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Portfolio table */}
       <div style={S.card}>
@@ -440,6 +492,11 @@ function CadastroTab({ imoveis, onSave, onEdit, onDelete, user }) {
   const [estimating, setEstimating] = useState(false);
   const [estimateData, setEstimateData] = useState(null);
   const autoEstimateKeyRef = useRef('');
+  const [geosampaData, setGeosampaData] = useState(null);
+  const [fipezapData, setFipezapData] = useState(null);
+  const [searchMode, setSearchMode] = useState('cep'); // 'cep' | 'nome'
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const upd = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -501,6 +558,67 @@ function CadastroTab({ imoveis, onSave, onEdit, onDelete, user }) {
     }, 1500);
     return () => clearTimeout(timer);
   }, [cepStatus, form.logradouro, form.numero, form.bairro, form.cidade, form.tipo, form.area_m2, form.padrao, form.uso]);
+
+  // GeoSampa auto-fetch for SP properties
+  useEffect(() => {
+    if (form.cidade !== 'São Paulo' || !form.logradouro || !form.numero) { setGeosampaData(null); return; }
+    const endereco = `${form.logradouro}, ${form.numero}, ${form.bairro || ''}, São Paulo, SP`;
+    fetch(`/api/geosampa?endereco=${encodeURIComponent(endereco)}`)
+      .then(r => r.json())
+      .then(data => { if (data.disponivel) setGeosampaData(data); else setGeosampaData(null); })
+      .catch(() => setGeosampaData(null));
+  }, [form.cidade, form.logradouro, form.numero, form.bairro]);
+
+  // FipeZap context for the city
+  useEffect(() => {
+    if (!form.cidade) { setFipezapData(null); return; }
+    fetch(`/api/fipezap?cidade=${encodeURIComponent(form.cidade)}&tipo=venda`)
+      .then(r => r.json())
+      .then(data => { if (!data.erro) setFipezapData(data); })
+      .catch(() => {});
+  }, [form.cidade]);
+
+  // Search by building/street name
+  async function handleNameSearch() {
+    if (!searchQuery.trim()) return;
+    setCepStatus('loading');
+    setEstimating(true);
+    setEstimateData(null);
+    try {
+      const res = await fetch('/api/real-estate-estimate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          logradouro: searchQuery, numero: '', bairro: '', cidade: '', uf: '',
+          tipo: form.tipo || 'Apartamento', uso: form.uso || 'Residencial',
+          area_m2: Number(form.area_m2) || 70, padrao: form.padrao || 'Médio',
+        }),
+      });
+      const data = await res.json();
+      if (!data.error) {
+        setEstimateData(data);
+        // Auto-fill from AI results — name, values, location, metragem
+        const emp = data.empreendimento || {};
+        setForm(f => ({
+          ...f,
+          nome: f.nome || emp.nome || searchQuery,
+          valor_mercado: f.valor_mercado || data.valor_mercado || 0,
+          aluguel: f.aluguel || data.aluguel_estimado || 0,
+          iptu_anual: f.iptu_anual || data.iptu_estimado_anual || 0,
+          condominio_mensal: f.condominio_mensal || data.condominio_estimado || 0,
+          // Auto-fill location from AI
+          logradouro: f.logradouro || emp.endereco || emp.logradouro || '',
+          bairro: f.bairro || emp.bairro || data.bairro || '',
+          cidade: f.cidade || emp.cidade || data.cidade || 'São Paulo',
+          uf: f.uf || emp.uf || data.uf || 'SP',
+          // Auto-fill area if returned
+          area_m2: f.area_m2 || (data.area_referencia ? Number(data.area_referencia) : '') || emp.area_m2 || '',
+        }));
+      }
+      setCepStatus(null);
+    } catch (err) { console.error('Name search error:', err); setCepStatus(null); }
+    setEstimating(false);
+  }
 
   async function handleSave() {
     setSaving(true);
@@ -567,26 +685,109 @@ function CadastroTab({ imoveis, onSave, onEdit, onDelete, user }) {
 
       {subtab === 'novo' ? (
         <div style={S.card}>
-          {/* Location */}
-          <div style={S.formSection}>Localização</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1fr', gap: 16, marginBottom: 20 }}>
-            <div>
-              <label style={S.label}>
-                CEP {cepStatus === 'loading' && '⏳'}{cepStatus === 'ok' && '✓'}{cepStatus === 'error' && '✗'}
-              </label>
-              <input style={{ ...S.input, borderColor: cepStatus === 'ok' ? '#34D399' : cepStatus === 'error' ? '#F87171' : undefined }}
-                value={form.cep} onChange={e => upd('cep', e.target.value)} placeholder="00000-000" />
+          {/* QUICK START — Search by CEP or Building Name */}
+          <div style={{ marginBottom: 28 }}>
+            <div style={{ fontSize: 18, fontWeight: 700, fontFamily: 'var(--font-serif)', marginBottom: 4, color: 'var(--text-primary)' }}>
+              {editingId ? 'Editar Ativo' : 'Adicionar Novo Ativo'}
             </div>
-            <Field label="Logradouro" value={form.logradouro} onChange={v => upd('logradouro', v)} />
-            <Field label="Número" value={form.numero} onChange={v => upd('numero', v)} />
+            <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>
+              Comece com o CEP ou nome do prédio — preenchemos o resto automaticamente.
+            </div>
+
+            {/* Search mode toggle */}
+            <div style={{ display: 'flex', gap: 0, marginBottom: 16, background: 'var(--bg-surface)', borderRadius: 10, border: '1px solid var(--border)', width: 'fit-content', overflow: 'hidden' }}>
+              {[{ id: 'cep', label: 'Por CEP' }, { id: 'nome', label: 'Por Nome / Endereço' }].map(m => (
+                <button key={m.id} onClick={() => setSearchMode(m.id)}
+                  style={{ padding: '10px 20px', fontSize: 13, fontWeight: searchMode === m.id ? 700 : 400, background: searchMode === m.id ? 'var(--accent)' : 'transparent', color: searchMode === m.id ? '#fff' : 'var(--text-muted)', border: 'none', cursor: 'pointer', transition: 'all 0.2s' }}>
+                  {m.label}
+                </button>
+              ))}
+            </div>
+
+            {searchMode === 'cep' ? (
+              <div style={{ display: 'grid', gridTemplateColumns: '180px 2fr 120px', gap: 16, alignItems: 'end' }}>
+                <div>
+                  <label style={S.label}>
+                    CEP {cepStatus === 'loading' && '⏳'}{cepStatus === 'ok' && '✓'}{cepStatus === 'error' && '✗'}
+                  </label>
+                  <input style={{ ...S.input, fontSize: 16, padding: '12px 16px', borderColor: cepStatus === 'ok' ? '#34D399' : cepStatus === 'error' ? '#F87171' : undefined }}
+                    value={form.cep} onChange={e => upd('cep', e.target.value)} placeholder="00000-000" autoFocus />
+                </div>
+                <Field label="Logradouro" value={form.logradouro} onChange={v => upd('logradouro', v)} />
+                <Field label="Número" value={form.numero} onChange={v => upd('numero', v)} placeholder="Nº" />
+              </div>
+            ) : (
+              <div style={{ display: 'flex', gap: 12, alignItems: 'end' }}>
+                <div style={{ flex: 1 }}>
+                  <label style={S.label}>Nome do prédio, rua ou endereço completo</label>
+                  <input style={{ ...S.input, fontSize: 16, padding: '12px 16px' }}
+                    value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                    placeholder="Ex: Edifício Itália, Rua Augusta 100, Pátio Higienópolis..."
+                    onKeyDown={e => { if (e.key === 'Enter') handleNameSearch(); }}
+                    autoFocus />
+                </div>
+                <button style={{ ...S.btn('primary'), padding: '12px 24px', fontSize: 14, whiteSpace: 'nowrap' }}
+                  onClick={handleNameSearch} disabled={estimating || !searchQuery.trim()}>
+                  {estimating ? 'Buscando...' : 'Buscar'}
+                </button>
+              </div>
+            )}
+
+            {/* Quick address details — only after CEP fill */}
+            {cepStatus === 'ok' && searchMode === 'cep' && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 16, marginTop: 16 }}>
+                <Field label="Bairro" value={form.bairro} onChange={v => upd('bairro', v)} />
+                <Field label="Cidade" value={form.cidade} onChange={v => upd('cidade', v)} />
+                <Field label="UF" value={form.uf} onChange={v => upd('uf', v)} />
+                <Field label="Complemento" value={form.complemento} onChange={v => upd('complemento', v)} />
+              </div>
+            )}
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr', gap: 16, marginBottom: 28 }}>
-            <Field label="Complemento" value={form.complemento} onChange={v => upd('complemento', v)} />
-            <Field label="Bairro" value={form.bairro} onChange={v => upd('bairro', v)} />
-            <Field label="Cidade" value={form.cidade} onChange={v => upd('cidade', v)} />
-            <Field label="UF" value={form.uf} onChange={v => upd('uf', v)} />
-            <Field label="Matrícula" value={form.matricula} onChange={v => upd('matricula', v)} placeholder="Nº matrícula" />
-          </div>
+
+          {/* GeoSampa card (auto for SP) */}
+          {geosampaData && (
+            <div style={{ marginBottom: 20, padding: 16, background: 'linear-gradient(135deg, rgba(52,211,153,0.06) 0%, rgba(52,211,153,0.02) 100%)', borderRadius: 12, border: '1px solid rgba(52,211,153,0.15)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#34D399', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Dados do Lote — GeoSampa</div>
+                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Prefeitura de São Paulo</span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+                {[
+                  { label: 'SQL', value: geosampaData.lote.sql || '—' },
+                  { label: 'Área Lote', value: geosampaData.lote.area ? `${Number(geosampaData.lote.area).toFixed(1)} m²` : '—' },
+                  { label: 'Zoneamento', value: geosampaData.lote.zoneamento || '—' },
+                  { label: 'Perímetro', value: geosampaData.lote.perimetro ? `${Number(geosampaData.lote.perimetro).toFixed(1)} m` : '—' },
+                ].map(d => (
+                  <div key={d.label} style={{ background: 'var(--bg-card)', borderRadius: 8, padding: '10px 12px', border: '1px solid var(--border)' }}>
+                    <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>{d.label}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{d.value}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* FipeZap context */}
+          {fipezapData && fipezapData.ultimoValor && (
+            <div style={{ marginBottom: 20, padding: 14, background: 'var(--bg-surface)', borderRadius: 10, border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>FipeZap {fipezapData.cidade}</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#60A5FA' }}>{fmtR(fipezapData.ultimoValor.precoM2)}/m²</div>
+              </div>
+              <div style={{ display: 'flex', gap: 16, fontSize: 12 }}>
+                {fipezapData.variacao.mes !== 0 && (
+                  <span style={{ color: fipezapData.variacao.mes >= 0 ? '#34D399' : '#F87171' }}>
+                    Mês: {fipezapData.variacao.mes > 0 ? '+' : ''}{fipezapData.variacao.mes.toFixed(1)}%
+                  </span>
+                )}
+                {fipezapData.variacao.ano !== 0 && (
+                  <span style={{ color: fipezapData.variacao.ano >= 0 ? '#34D399' : '#F87171' }}>
+                    12m: {fipezapData.variacao.ano > 0 ? '+' : ''}{fipezapData.variacao.ano.toFixed(1)}%
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Quick Classification — appears after CEP auto-fill */}
           {cepStatus === 'ok' && (
@@ -799,122 +1000,149 @@ function CadastroTab({ imoveis, onSave, onEdit, onDelete, user }) {
             </div>
           )}
 
-          {/* Characteristics */}
-          <div style={S.formSection}>Características</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1fr 1fr', gap: 16, marginBottom: 28 }}>
+          {/* ESSENTIALS — Always visible */}
+          <div style={S.formSection}>Dados Essenciais</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: 16, marginBottom: 16 }}>
             <Field label="Nome / Apelido" value={form.nome} onChange={v => upd('nome', v)} placeholder="Ex: Apto Faria Lima" />
             <Field label="Tipo" value={form.tipo} onChange={v => upd('tipo', v)} options={TIPOS} />
-            <Field label="Uso" value={form.uso} onChange={v => upd('uso', v)} options={USOS} />
-            <Field label="Estágio" value={form.estagio} onChange={v => upd('estagio', v)} options={ESTAGIOS} />
             <Field label="Área m²" value={form.area_m2} onChange={v => upd('area_m2', v)} type="number" />
-            <Field label="Quartos" value={form.quartos} onChange={v => upd('quartos', v)} type="number" />
-            <Field label="Padrão" value={form.padrao} onChange={v => upd('padrao', v)} options={PADROES} />
-          </div>
-
-          {/* Construction (conditional) */}
-          {(form.estagio === 'Em Construção' || form.estagio === 'Na Planta') && (
-            <>
-              <div style={S.formSection}>Dados da Construção</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 16, marginBottom: 20 }}>
-                <Field label="Construtora" value={form.construtora} onChange={v => upd('construtora', v)} />
-                <Field label="Data Prevista Entrega" value={form.data_entrega} onChange={v => upd('data_entrega', v)} type="date" />
-                <Field label="% Obra Concluído" value={form.pct_obra} onChange={v => upd('pct_obra', v)} type="number" placeholder="0-100" />
-                <Field label="Valor do Contrato" value={form.valor_contrato} onChange={v => upd('valor_contrato', v)} type="number" placeholder="R$" />
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 28 }}>
-                <Field label="Entrada Paga" value={form.entrada_paga} onChange={v => upd('entrada_paga', v)} type="number" placeholder="R$" />
-                <Field label="Parcela Mensal Obra" value={form.parcela_obra} onChange={v => upd('parcela_obra', v)} type="number" placeholder="R$" />
-                <Field label="Índice Correção" value={form.indice_correcao} onChange={v => upd('indice_correcao', v)} options={['INCC-DI', 'INCC-M', 'IPCA']} />
-              </div>
-            </>
-          )}
-
-          {/* Financing (conditional) */}
-          {(Number(form.divida) > 0 || Number(form.valor_financiado) > 0) && (
-            <>
-              <div style={S.formSection}>Financiamento</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr', gap: 16, marginBottom: 28 }}>
-                <Field label="Banco" value={form.banco_financiamento} onChange={v => upd('banco_financiamento', v)} />
-                <Field label="Valor Financiado" value={form.valor_financiado} onChange={v => upd('valor_financiado', v)} type="number" placeholder="R$" />
-                <Field label="Taxa a.a. %" value={form.taxa_financiamento} onChange={v => upd('taxa_financiamento', v)} type="number" suffix="%" />
-                <Field label="Prazo (meses)" value={form.prazo_financiamento} onChange={v => upd('prazo_financiamento', v)} type="number" />
-                <Field label="Sistema" value={form.sistema_amortizacao} onChange={v => upd('sistema_amortizacao', v)} options={['SAC', 'Price', 'Misto']} />
-              </div>
-            </>
-          )}
-
-          {/* Ownership */}
-          <div style={S.formSection}>Estrutura Patrimonial</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 16, marginBottom: 20 }}>
-            <Field label="Titular" value={form.titular} onChange={v => upd('titular', v)} options={TITULARES} />
-            <Field label="Nome Titular" value={form.titular_nome} onChange={v => upd('titular_nome', v)} />
-            <Field label="CNPJ (se PJ)" value={form.cnpj} onChange={v => upd('cnpj', v)} />
-            <Field label="Padrão" value={form.padrao} onChange={v => upd('padrao', v)} options={PADROES} />
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr', gap: 16, marginBottom: 28 }}>
-            <Field label="Custo Aquisição" value={form.custo_aquisicao} onChange={v => upd('custo_aquisicao', v)} type="number" placeholder="R$" />
-            <Field label="Data Aquisição" value={form.data_aquisicao} onChange={v => upd('data_aquisicao', v)} type="date" />
-            <Field label="Valor Mercado" value={form.valor_mercado} onChange={v => upd('valor_mercado', v)} type="number" placeholder="R$" />
-            <Field label="Dívida" value={form.divida} onChange={v => upd('divida', v)} type="number" placeholder="R$" />
-            <Field label="Parcela Mensal" value={form.parcela_mensal} onChange={v => upd('parcela_mensal', v)} type="number" placeholder="R$" />
-          </div>
-
-          {/* Operational */}
-          <div style={S.formSection}>Operacional</div>
-          <div style={{ display: 'grid', gridTemplateColumns: form.status === 'Uso Próprio' ? '1fr' : '1fr 1fr 1fr 1fr', gap: 16, marginBottom: 20 }}>
             <Field label="Status" value={form.status} onChange={v => upd('status', v)} options={STATUS_LIST} />
-            {form.status !== 'Uso Próprio' && (
-              <>
-                <Field label="Inquilino" value={form.inquilino} onChange={v => upd('inquilino', v)} />
-                <Field label="Contato Inquilino" value={form.inquilino_contato} onChange={v => upd('inquilino_contato', v)} />
-                <div>
-                  <Field label="Aluguel Mensal" value={form.aluguel} onChange={v => upd('aluguel', v)} type="number" placeholder="R$" />
-                  {Number(form.aluguel) > 0 && (
-                    <div style={{ marginTop: 6, fontSize: 12, color: previewNOI >= 0 ? '#34D399' : '#F87171' }}>
-                      NOI estimado: {fmtR(previewNOI)}/ano
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
+            <Field label="Valor Mercado" value={form.valor_mercado} onChange={v => upd('valor_mercado', v)} type="number" placeholder="R$" />
           </div>
-          {form.status !== 'Uso Próprio' && (
-            <>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr', gap: 16, marginBottom: 20 }}>
-                <Field label="Início Contrato" value={form.contrato_inicio} onChange={v => upd('contrato_inicio', v)} type="date" />
-                <Field label="Fim Contrato" value={form.contrato_fim} onChange={v => upd('contrato_fim', v)} type="date" />
-                <Field label="Índice Reajuste" value={form.indice_reajuste} onChange={v => upd('indice_reajuste', v)} options={INDICES} />
-                <Field label="Próx. Reajuste" value={form.data_proximo_reajuste} onChange={v => upd('data_proximo_reajuste', v)} type="date" />
-                <Field label="Garantia" value={form.garantia} onChange={v => upd('garantia', v)} options={GARANTIAS} />
+          {/* Quick rental row if alugado */}
+          {form.status === 'Alugado' && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 16 }}>
+              <div>
+                <Field label="Aluguel Mensal" value={form.aluguel} onChange={v => upd('aluguel', v)} type="number" placeholder="R$" />
+                {Number(form.aluguel) > 0 && (
+                  <div style={{ marginTop: 6, fontSize: 12, color: previewNOI >= 0 ? '#34D399' : '#F87171' }}>
+                    Renda líquida: {fmtR(previewNOI)}/ano
+                  </div>
+                )}
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 28 }}>
-                <Field label="Imobiliária" value={form.imobiliaria} onChange={v => upd('imobiliaria', v)} />
-                <Field label="Taxa Adm %" value={form.taxa_adm} onChange={v => upd('taxa_adm', v)} type="number" suffix="%" />
-                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
-                  <label style={{ ...S.label, marginBottom: 0, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                    <input type="checkbox" checked={form.inadimplente || false} onChange={e => upd('inadimplente', e.target.checked)} />
-                    Inadimplente
-                  </label>
+              <Field label="Inquilino" value={form.inquilino} onChange={v => upd('inquilino', v)} />
+              <Field label="Fim Contrato" value={form.contrato_fim} onChange={v => upd('contrato_fim', v)} type="date" />
+            </div>
+          )}
+
+          {/* ADVANCED TOGGLE */}
+          <div style={{ marginBottom: 20 }}>
+            <button
+              onClick={() => setShowAdvanced(!showAdvanced)}
+              style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '8px 0', display: 'flex', alignItems: 'center', gap: 6 }}
+            >
+              <span style={{ transform: showAdvanced ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.2s', display: 'inline-block' }}>▶</span>
+              {showAdvanced ? 'Ocultar campos avançados' : 'Mostrar campos avançados'} (classificação, patrimonial, operacional, encargos)
+            </button>
+          </div>
+
+          {showAdvanced && (
+            <>
+              {/* Classification */}
+              <div style={S.formSection}>Classificação</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr', gap: 16, marginBottom: 28 }}>
+                <Field label="Uso" value={form.uso} onChange={v => upd('uso', v)} options={USOS} />
+                <Field label="Estágio" value={form.estagio} onChange={v => upd('estagio', v)} options={ESTAGIOS} />
+                <Field label="Quartos" value={form.quartos} onChange={v => upd('quartos', v)} type="number" />
+                <Field label="Padrão" value={form.padrao} onChange={v => upd('padrao', v)} options={PADROES} />
+                <Field label="Matrícula" value={form.matricula} onChange={v => upd('matricula', v)} placeholder="Nº matrícula" />
+              </div>
+
+              {/* Construction (conditional) */}
+              {(form.estagio === 'Em Construção' || form.estagio === 'Na Planta') && (
+                <>
+                  <div style={S.formSection}>Dados da Construção</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 16, marginBottom: 20 }}>
+                    <Field label="Construtora" value={form.construtora} onChange={v => upd('construtora', v)} />
+                    <Field label="Data Prevista Entrega" value={form.data_entrega} onChange={v => upd('data_entrega', v)} type="date" />
+                    <Field label="% Obra Concluído" value={form.pct_obra} onChange={v => upd('pct_obra', v)} type="number" placeholder="0-100" />
+                    <Field label="Valor do Contrato" value={form.valor_contrato} onChange={v => upd('valor_contrato', v)} type="number" placeholder="R$" />
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 28 }}>
+                    <Field label="Entrada Paga" value={form.entrada_paga} onChange={v => upd('entrada_paga', v)} type="number" placeholder="R$" />
+                    <Field label="Parcela Mensal Obra" value={form.parcela_obra} onChange={v => upd('parcela_obra', v)} type="number" placeholder="R$" />
+                    <Field label="Índice Correção" value={form.indice_correcao} onChange={v => upd('indice_correcao', v)} options={['INCC-DI', 'INCC-M', 'IPCA']} />
+                  </div>
+                </>
+              )}
+
+              {/* Ownership */}
+              <div style={S.formSection}>Estrutura Patrimonial</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 16, marginBottom: 20 }}>
+                <Field label="Titular" value={form.titular} onChange={v => upd('titular', v)} options={TITULARES} />
+                <Field label="Nome Titular" value={form.titular_nome} onChange={v => upd('titular_nome', v)} />
+                <Field label="CNPJ (se PJ)" value={form.cnpj} onChange={v => upd('cnpj', v)} />
+                <Field label="Custo Aquisição" value={form.custo_aquisicao} onChange={v => upd('custo_aquisicao', v)} type="number" placeholder="R$" />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 16, marginBottom: 28 }}>
+                <Field label="Data Aquisição" value={form.data_aquisicao} onChange={v => upd('data_aquisicao', v)} type="date" />
+                <Field label="Dívida" value={form.divida} onChange={v => upd('divida', v)} type="number" placeholder="R$" />
+                <Field label="Parcela Mensal" value={form.parcela_mensal} onChange={v => upd('parcela_mensal', v)} type="number" placeholder="R$" />
+                <Field label="Valor Financiado" value={form.valor_financiado} onChange={v => upd('valor_financiado', v)} type="number" placeholder="R$" />
+              </div>
+
+              {/* Financing (conditional — shows when divida or valor_financiado filled) */}
+              {(Number(form.divida) > 0 || Number(form.valor_financiado) > 0) && (
+                <>
+                  <div style={S.formSection}>Financiamento</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 16, marginBottom: 28 }}>
+                    <Field label="Banco" value={form.banco_financiamento} onChange={v => upd('banco_financiamento', v)} />
+                    <Field label="Taxa a.a. %" value={form.taxa_financiamento} onChange={v => upd('taxa_financiamento', v)} type="number" suffix="%" />
+                    <Field label="Prazo (meses)" value={form.prazo_financiamento} onChange={v => upd('prazo_financiamento', v)} type="number" />
+                    <Field label="Sistema" value={form.sistema_amortizacao} onChange={v => upd('sistema_amortizacao', v)} options={['SAC', 'Price', 'Misto']} />
+                  </div>
+                </>
+              )}
+
+              {/* Operational — rental details */}
+              {form.status !== 'Uso Próprio' && form.status !== 'Alugado' && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 20 }}>
+                  <Field label="Inquilino" value={form.inquilino} onChange={v => upd('inquilino', v)} />
+                  <Field label="Contato Inquilino" value={form.inquilino_contato} onChange={v => upd('inquilino_contato', v)} />
+                  <Field label="Aluguel Mensal" value={form.aluguel} onChange={v => upd('aluguel', v)} type="number" placeholder="R$" />
                 </div>
+              )}
+              {form.status === 'Alugado' && (
+                <div style={S.formSection}>Contrato & Gestão</div>
+              )}
+              {(form.status === 'Alugado' || form.status !== 'Uso Próprio') && form.status !== 'Vago' && form.status !== 'Em Reforma' && form.status !== 'À Venda' && (
+                <>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr', gap: 16, marginBottom: 20 }}>
+                    <Field label="Contato Inquilino" value={form.inquilino_contato} onChange={v => upd('inquilino_contato', v)} />
+                    <Field label="Início Contrato" value={form.contrato_inicio} onChange={v => upd('contrato_inicio', v)} type="date" />
+                    <Field label="Índice Reajuste" value={form.indice_reajuste} onChange={v => upd('indice_reajuste', v)} options={INDICES} />
+                    <Field label="Próx. Reajuste" value={form.data_proximo_reajuste} onChange={v => upd('data_proximo_reajuste', v)} type="date" />
+                    <Field label="Garantia" value={form.garantia} onChange={v => upd('garantia', v)} options={GARANTIAS} />
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 28 }}>
+                    <Field label="Imobiliária" value={form.imobiliaria} onChange={v => upd('imobiliaria', v)} />
+                    <Field label="Taxa Adm %" value={form.taxa_adm} onChange={v => upd('taxa_adm', v)} type="number" suffix="%" />
+                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
+                      <label style={{ ...S.label, marginBottom: 0, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                        <input type="checkbox" checked={form.inadimplente || false} onChange={e => upd('inadimplente', e.target.checked)} />
+                        Inadimplente
+                      </label>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* Charges */}
+              <div style={S.formSection}>Encargos</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 16, marginBottom: 28 }}>
+                <Field label="IPTU Anual" value={form.iptu_anual} onChange={v => upd('iptu_anual', v)} type="number" placeholder="R$" />
+                <Field label="Condomínio Mensal" value={form.condominio_mensal} onChange={v => upd('condominio_mensal', v)} type="number" placeholder="R$" />
+                <Field label="Seguro Anual" value={form.seguro_anual} onChange={v => upd('seguro_anual', v)} type="number" placeholder="R$" />
+                <Field label="CAPEX Pendente" value={form.capex_pendente} onChange={v => upd('capex_pendente', v)} type="number" placeholder="R$" />
+              </div>
+
+              {/* Notes */}
+              <div style={{ marginBottom: 28 }}>
+                <label style={S.label}>Observações</label>
+                <textarea style={{ ...S.input, minHeight: 80, resize: 'vertical' }} value={form.observacoes || ''} onChange={e => upd('observacoes', e.target.value)} />
               </div>
             </>
           )}
-          {form.status === 'Uso Próprio' && <div style={{ marginBottom: 28 }} />}
-
-          {/* Charges */}
-          <div style={S.formSection}>Encargos</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 16, marginBottom: 28 }}>
-            <Field label="IPTU Anual" value={form.iptu_anual} onChange={v => upd('iptu_anual', v)} type="number" placeholder="R$" />
-            <Field label="Condomínio Mensal" value={form.condominio_mensal} onChange={v => upd('condominio_mensal', v)} type="number" placeholder="R$" />
-            <Field label="Seguro Anual" value={form.seguro_anual} onChange={v => upd('seguro_anual', v)} type="number" placeholder="R$" />
-            <Field label="CAPEX Pendente" value={form.capex_pendente} onChange={v => upd('capex_pendente', v)} type="number" placeholder="R$" />
-          </div>
-
-          {/* Notes */}
-          <div style={{ marginBottom: 28 }}>
-            <label style={S.label}>Observações</label>
-            <textarea style={{ ...S.input, minHeight: 80, resize: 'vertical' }} value={form.observacoes || ''} onChange={e => upd('observacoes', e.target.value)} />
-          </div>
 
           <div style={{ display: 'flex', gap: 12 }}>
             <button style={S.btn('primary')} onClick={handleSave} disabled={saving}>
@@ -1256,20 +1484,20 @@ function MotorFinanceiroTab({ imoveis }) {
       <div style={S.subtabs}>
         {['noi', 'fluxo', 'kpis'].map(t => (
           <button key={t} style={S.subtab(subtab === t)} onClick={() => setSubtab(t)}>
-            {{ noi: 'NOI por Ativo', fluxo: 'Fluxo de Caixa', kpis: 'KPIs Portfólio' }[t]}
+            {{ noi: 'Renda Líquida por Ativo', fluxo: 'Fluxo de Caixa', kpis: 'KPIs Portfólio' }[t]}
           </button>
         ))}
       </div>
 
       {subtab === 'noi' && (
         <div style={S.card}>
-          <div style={S.formSection}>NOI Detalhado por Ativo</div>
+          <div style={S.formSection}>Renda Líquida por Ativo</div>
           {imoveis.length === 0 ? <div style={S.emptyState}>Cadastre imóveis para ver o NOI</div> : (
             <div style={{ overflowX: 'auto' }}>
               <table style={S.table}>
                 <thead>
                   <tr>
-                    {['Ativo', 'Aluguel Bruto', '(-) Vacância 5%', '(-) IPTU', '(-) Condo', '(-) Seguro', '(-) CAPEX', '(-) Adm', '(-) Manut 3%', '= NOI Mensal', '(-) Dívida', '= Cash Flow'].map(h => (
+                    {['Ativo', 'Aluguel Bruto', '(-) Vacância 5%', '(-) IPTU', '(-) Condo', '(-) Seguro', '(-) CAPEX', '(-) Adm', '(-) Manut 3%', '= NOI Mensal', '(-) Dívida', '= Fluxo Líquido'].map(h => (
                       <th key={h} style={S.th}>{h}</th>
                     ))}
                   </tr>
@@ -1326,8 +1554,8 @@ function MotorFinanceiroTab({ imoveis }) {
                   <th style={S.th}>Receita Bruta</th>
                   <th style={S.th}>NOI</th>
                   <th style={S.th}>Serviço Dívida</th>
-                  <th style={S.th}>Cash Flow Livre</th>
-                  <th style={S.th}>Cash Flow Acum.</th>
+                  <th style={S.th}>Fluxo Livre</th>
+                  <th style={S.th}>Fluxo Acum.</th>
                 </tr>
               </thead>
               <tbody>
@@ -1378,8 +1606,8 @@ function MotorFinanceiroTab({ imoveis }) {
                 { label: 'LTV Portfólio', value: fmtPct(ltvPort), color: ltvPort > 70 ? '#F87171' : '#34D399' },
                 { label: 'Cap Rate', value: fmtPct(capRate), color: '#60A5FA', accent: true },
                 { label: 'Yield on Cost', value: fmtPct(yieldOnCost), color: '#A78BFA' },
-                { label: 'ROE (NOI/Equity)', value: fmtPct(roe), color: '#34D399' },
-                { label: 'NOI Total Anual', value: fmtR(noiTotal), color: '#34D399' },
+                { label: 'Retorno s/ Patrimônio', value: fmtPct(roe), color: '#34D399' },
+                { label: 'Renda Líquida Anual', value: fmtR(noiTotal), color: '#34D399' },
               ].map(k => (
                 <div key={k.label} style={S.kpiCard(k.accent)}>
                   <div style={S.kpiLabel}>{k.label}</div>
@@ -1464,7 +1692,7 @@ function ValuationTab({ imoveis }) {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 24 }}>
             <Field label="Cap Rate %" value={capRate} onChange={v => setCapRate(v)} type="number" suffix="%" />
             <div>
-              <label style={S.label}>NOI Anual</label>
+              <label style={S.label}>Renda Líquida (NOI)</label>
               <div style={{ ...S.input, background: 'var(--bg-elevated)', fontWeight: 600 }}>{fmtR(calcNOI(im))}</div>
             </div>
           </div>
@@ -1628,19 +1856,296 @@ Recomende a melhor decisão considerando cenário macro, mercado imobiliário lo
 // TAB 7: MERCADO IA
 // ============================================================
 function MercadoIATab({ imoveis }) {
-  const [subtab, setSubtab] = useState('cotacao');
+  const [subtab, setSubtab] = useState('fipezap');
   const [selectedId, setSelectedId] = useState('');
+  const [fzData, setFzData] = useState(null);
+  const [fzCidade, setFzCidade] = useState('');
+  const [fzTipo, setFzTipo] = useState('venda');
+  const [fzLoading, setFzLoading] = useState(false);
+  const [fiiData, setFiiData] = useState(null);
+  const [fiiLoading, setFiiLoading] = useState(false);
   const im = imoveis.find(i => i.id === selectedId);
+
+  // Auto-detect most common city
+  useEffect(() => {
+    if (fzCidade) return;
+    const cities = {};
+    imoveis.forEach(i => { if (i.cidade) cities[i.cidade] = (cities[i.cidade] || 0) + 1; });
+    const top = Object.entries(cities).sort((a, b) => b[1] - a[1])[0];
+    if (top) setFzCidade(top[0]);
+    else setFzCidade('São Paulo');
+  }, [imoveis, fzCidade]);
+
+  // Fetch FipeZap
+  useEffect(() => {
+    if (!fzCidade) return;
+    setFzLoading(true);
+    fetch(`/api/fipezap?cidade=${encodeURIComponent(fzCidade)}&tipo=${fzTipo}`)
+      .then(r => r.json())
+      .then(data => { if (!data.erro) setFzData(data); else setFzData(null); })
+      .catch(() => setFzData(null))
+      .finally(() => setFzLoading(false));
+  }, [fzCidade, fzTipo]);
+
+  // Fetch FII benchmarks
+  useEffect(() => {
+    if (subtab !== 'benchmarkFii') return;
+    if (fiiData) return;
+    setFiiLoading(true);
+    fetch('/api/cvm-fii')
+      .then(r => r.json())
+      .then(data => { if (!data.erro) setFiiData(data); })
+      .catch(() => {})
+      .finally(() => setFiiLoading(false));
+  }, [subtab, fiiData]);
 
   return (
     <div>
       <div style={S.subtabs}>
-        {['cotacao', 'estudo', 'holding'].map(t => (
+        {['fipezap', 'benchmarkFii', 'cotacao', 'estudo', 'holding'].map(t => (
           <button key={t} style={S.subtab(subtab === t)} onClick={() => setSubtab(t)}>
-            {{ cotacao: 'Cotação de Aluguel', estudo: 'Estudo de Região', holding: 'Holding & Tributação' }[t]}
+            {{ fipezap: 'Índice FipeZap', benchmarkFii: 'Benchmark FII', cotacao: 'Cotação IA', estudo: 'Estudo Região', holding: 'Holding' }[t]}
           </button>
         ))}
       </div>
+
+      {/* FIPEZAP TAB */}
+      {subtab === 'fipezap' && (
+        <div style={S.card}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+            <div style={S.formSection}>Índice FipeZap — Preço R$/m²</div>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+              <select style={{ ...S.select, width: 200 }} value={fzCidade} onChange={e => setFzCidade(e.target.value)}>
+                {fzData?.cidadesDisponiveis?.map(c => <option key={c} value={c}>{c}</option>)}
+                {!fzData?.cidadesDisponiveis && <option value={fzCidade}>{fzCidade}</option>}
+              </select>
+              <div style={{ display: 'flex', gap: 0, background: 'var(--bg-surface)', borderRadius: 8, border: '1px solid var(--border)', overflow: 'hidden' }}>
+                {['venda', 'locacao'].map(t => (
+                  <button key={t} onClick={() => setFzTipo(t)} style={{ padding: '6px 14px', fontSize: 12, fontWeight: fzTipo === t ? 700 : 400, background: fzTipo === t ? 'var(--accent)' : 'transparent', color: fzTipo === t ? '#fff' : 'var(--text-muted)', border: 'none', cursor: 'pointer' }}>
+                    {t === 'venda' ? 'Venda' : 'Locação'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {fzLoading && <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>Carregando dados FipeZap...</div>}
+
+          {fzData && !fzLoading && (
+            <>
+              {/* KPI cards */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
+                {[
+                  { label: `R$/m² ${fzTipo === 'venda' ? 'Venda' : 'Aluguel'}`, value: fmtR(fzData.ultimoValor?.precoM2), color: '#60A5FA' },
+                  { label: 'Variação Mensal', value: `${fzData.variacao.mes > 0 ? '+' : ''}${fzData.variacao.mes.toFixed(2)}%`, color: fzData.variacao.mes >= 0 ? '#34D399' : '#F87171' },
+                  { label: 'Variação 12 Meses', value: `${fzData.variacao.ano > 0 ? '+' : ''}${fzData.variacao.ano.toFixed(2)}%`, color: fzData.variacao.ano >= 0 ? '#34D399' : '#F87171' },
+                  { label: 'Acumulado 5 Anos', value: `${fzData.variacao.acumulado5anos > 0 ? '+' : ''}${fzData.variacao.acumulado5anos.toFixed(1)}%`, color: fzData.variacao.acumulado5anos >= 0 ? '#34D399' : '#F87171' },
+                ].map(k => (
+                  <div key={k.label} style={{ background: 'var(--bg-surface)', borderRadius: 12, border: '1px solid var(--border)', padding: '16px 20px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 24, fontWeight: 700, color: k.color, fontVariantNumeric: 'tabular-nums' }}>{k.value}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{k.label}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Portfolio comparison */}
+              {imoveis.length > 0 && fzData.ultimoValor?.precoM2 > 0 && (() => {
+                const totalArea = imoveis.reduce((s, i) => s + (Number(i.area_m2) || 0), 0);
+                const totalValor = imoveis.reduce((s, i) => s + (Number(i.valor_mercado) || 0), 0);
+                const portM2 = totalArea > 0 ? totalValor / totalArea : 0;
+                const diff = portM2 > 0 ? ((portM2 / fzData.ultimoValor.precoM2) - 1) * 100 : 0;
+                return (
+                  <div style={{ marginBottom: 24, padding: 16, background: 'linear-gradient(135deg, rgba(96,165,250,0.06) 0%, rgba(96,165,250,0.02) 100%)', borderRadius: 12, border: '1px solid rgba(96,165,250,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Seu Portfólio vs FipeZap ({fzData.cidade})</div>
+                      <div style={{ display: 'flex', gap: 24, alignItems: 'baseline' }}>
+                        <span style={{ fontSize: 18, fontWeight: 700 }}>{fmtR(portM2)}/m²</span>
+                        <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>vs {fmtR(fzData.ultimoValor.precoM2)}/m²</span>
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: Math.abs(diff) < 10 ? '#34D399' : '#FBBF24' }}>
+                      {diff > 0 ? '+' : ''}{diff.toFixed(1)}%
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Historical chart (SVG line with gradient) */}
+              {fzData.historico && fzData.historico.length > 1 && (() => {
+                const h = fzData.historico;
+                const vals = h.map(p => p.precoM2);
+                const mn = Math.min(...vals) * 0.95;
+                const mx = Math.max(...vals) * 1.05;
+                const W = 700, H = 200, PAD = 40;
+                const toX = (i) => PAD + (i / (h.length - 1)) * (W - PAD * 2);
+                const toY = (v) => PAD / 2 + (H - PAD) - ((v - mn) / (mx - mn)) * (H - PAD);
+                const points = h.map((p, i) => `${toX(i)},${toY(p.precoM2)}`).join(' ');
+                const areaPoints = `${toX(0)},${H} ${points} ${toX(h.length - 1)},${H}`;
+                // Grid lines (5 horizontal)
+                const gridLines = Array.from({ length: 5 }, (_, i) => {
+                  const v = mn + ((mx - mn) / 4) * i;
+                  return { y: toY(v), label: Math.round(v).toLocaleString('pt-BR') };
+                });
+                // Date labels (show every 12 months)
+                const dateLabels = h.filter((_, i) => i === 0 || i === h.length - 1 || i % 12 === 0);
+                return (
+                  <div style={{ marginBottom: 24 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 12 }}>
+                      Evolução R$/m² — {fzData.cidade} ({fzTipo === 'venda' ? 'Venda' : 'Locação'})
+                    </div>
+                    <svg viewBox={`0 0 ${W} ${H + 30}`} width="100%" style={{ background: 'linear-gradient(180deg, var(--bg-surface) 0%, var(--bg-card) 100%)', borderRadius: 14, border: '1px solid var(--border)' }}>
+                      <defs>
+                        <linearGradient id="fzGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#60A5FA" stopOpacity="0.3" />
+                          <stop offset="100%" stopColor="#60A5FA" stopOpacity="0.02" />
+                        </linearGradient>
+                      </defs>
+                      {/* Grid lines */}
+                      {gridLines.map((g, i) => (
+                        <React.Fragment key={i}>
+                          <line x1={PAD} y1={g.y} x2={W - PAD} y2={g.y} stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
+                          <text x={PAD - 6} y={g.y + 3} fill="rgba(255,255,255,0.25)" fontSize="9" textAnchor="end">{g.label}</text>
+                        </React.Fragment>
+                      ))}
+                      {/* Area fill */}
+                      <polygon points={areaPoints} fill="url(#fzGrad)" />
+                      {/* Line */}
+                      <polyline points={points} fill="none" stroke="#60A5FA" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+                      {/* Start and end dots */}
+                      <circle cx={toX(0)} cy={toY(h[0].precoM2)} r="4" fill="#60A5FA" stroke="var(--bg-card)" strokeWidth="2" />
+                      <circle cx={toX(h.length - 1)} cy={toY(h[h.length - 1].precoM2)} r="5" fill="#60A5FA" stroke="var(--bg-card)" strokeWidth="2" />
+                      {/* Value labels */}
+                      <text x={toX(0)} y={toY(h[0].precoM2) - 10} fill="#60A5FA" fontSize="11" fontWeight="600" textAnchor="start">{fmtR(h[0].precoM2)}</text>
+                      <text x={toX(h.length - 1)} y={toY(h[h.length - 1].precoM2) - 10} fill="#60A5FA" fontSize="11" fontWeight="700" textAnchor="end">{fmtR(h[h.length - 1].precoM2)}</text>
+                      {/* Date labels */}
+                      {dateLabels.map((d, i) => {
+                        const idx = h.indexOf(d);
+                        return <text key={i} x={toX(idx)} y={H + 18} fill="rgba(255,255,255,0.35)" fontSize="9" textAnchor="middle">{d.data}</text>;
+                      })}
+                    </svg>
+                  </div>
+                );
+              })()}
+
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', textAlign: 'right' }}>
+                Fonte: Índice FipeZap · Ref: {fzData.ultimoValor?.data || '—'}
+              </div>
+            </>
+          )}
+
+          {!fzData && !fzLoading && (
+            <div style={S.emptyState}>Dados FipeZap não disponíveis para esta cidade.</div>
+          )}
+        </div>
+      )}
+
+      {/* FII BENCHMARK TAB */}
+      {subtab === 'benchmarkFii' && (
+        <div style={S.card}>
+          <div style={S.formSection}>Benchmark FII — Fundos Imobiliários (CVM)</div>
+
+          {fiiLoading && <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>Carregando dados CVM FII...</div>}
+
+          {fiiData && !fiiLoading && (
+            <>
+              {/* KPI row */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
+                {[
+                  { label: 'Total FIIs', value: fiiData.totalFundos, color: '#60A5FA' },
+                  { label: 'PL Total', value: fmtR(fiiData.plTotal), color: '#34D399' },
+                  { label: 'DY Médio (anual)', value: fmtPct(fiiData.dividendYieldMedio), color: '#FBBF24' },
+                  { label: 'Referência', value: fiiData.referencia || '—', color: 'var(--text-primary)' },
+                ].map(k => (
+                  <div key={k.label} style={{ background: 'var(--bg-surface)', borderRadius: 12, border: '1px solid var(--border)', padding: '16px 20px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: k.color, fontVariantNumeric: 'tabular-nums' }}>{k.value}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{k.label}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Your yield vs FII */}
+              {imoveis.length > 0 && (() => {
+                const pat = imoveis.reduce((s, i) => s + (i.valor_mercado || i.custo_aquisicao || 0), 0);
+                const noiAnual = imoveis.reduce((s, i) => s + calcNOI(i), 0);
+                const seuYield = pat > 0 ? (noiAnual / pat) * 100 : 0;
+                return (
+                  <div style={{ marginBottom: 24, padding: 16, background: 'linear-gradient(135deg, rgba(167,139,250,0.06) 0%, rgba(167,139,250,0.02) 100%)', borderRadius: 12, border: '1px solid rgba(167,139,250,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Seu Yield vs Mercado FII</div>
+                      <div style={{ display: 'flex', gap: 24, alignItems: 'baseline' }}>
+                        <span style={{ fontSize: 18, fontWeight: 700, color: '#A78BFA' }}>Você: {fmtPct(seuYield)}</span>
+                        <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>FII Mercado: {fmtPct(fiiData.dividendYieldMedio)}</span>
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: seuYield > fiiData.dividendYieldMedio ? '#34D399' : '#F87171' }}>
+                      {seuYield > fiiData.dividendYieldMedio ? 'Acima' : 'Abaixo'} do mercado
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Segments table */}
+              {fiiData.segmentos && fiiData.segmentos.length > 0 && (
+                <div style={{ marginBottom: 24 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Por Segmento</div>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={S.table}>
+                      <thead><tr>
+                        {['Segmento', 'Fundos', 'PL Total', 'DY Médio'].map(h => <th key={h} style={S.th}>{h}</th>)}
+                      </tr></thead>
+                      <tbody>
+                        {fiiData.segmentos.map(s => (
+                          <tr key={s.nome}>
+                            <td style={{ ...S.td, fontWeight: 600 }}>{s.nome}</td>
+                            <td style={S.td}>{s.fundos}</td>
+                            <td style={{ ...S.td, fontVariantNumeric: 'tabular-nums' }}>{fmtR(s.pl)}</td>
+                            <td style={{ ...S.td, color: '#FBBF24', fontWeight: 600 }}>{fmtPct(s.yieldMed)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Top funds */}
+              {fiiData.topFundos && fiiData.topFundos.length > 0 && (
+                <details>
+                  <summary style={{ fontSize: 13, color: 'var(--accent)', cursor: 'pointer', fontWeight: 600, marginBottom: 12 }}>
+                    Top {fiiData.topFundos.length} FIIs por PL
+                  </summary>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={S.table}>
+                      <thead><tr>
+                        {['Fundo', 'Segmento', 'PL', 'Distribuição/mês', 'DY Mês'].map(h => <th key={h} style={S.th}>{h}</th>)}
+                      </tr></thead>
+                      <tbody>
+                        {fiiData.topFundos.map(f => (
+                          <tr key={f.cnpj}>
+                            <td style={{ ...S.td, fontWeight: 600, maxWidth: 250, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.nome}</td>
+                            <td style={S.td}><span style={S.badge('#60A5FA')}>{f.segmento}</span></td>
+                            <td style={{ ...S.td, fontVariantNumeric: 'tabular-nums' }}>{fmtR(f.pl)}</td>
+                            <td style={{ ...S.td, fontVariantNumeric: 'tabular-nums' }}>{fmtR(f.distribuicaoMes)}</td>
+                            <td style={{ ...S.td, color: '#FBBF24', fontWeight: 600 }}>{fmtPct(f.yieldMes)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </details>
+              )}
+
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', textAlign: 'right', marginTop: 16 }}>
+                Fonte: CVM Dados Abertos · Ref: {fiiData.referencia}
+              </div>
+            </>
+          )}
+
+          {!fiiData && !fiiLoading && (
+            <div style={S.emptyState}>Dados CVM FII não disponíveis no momento.</div>
+          )}
+        </div>
+      )}
 
       {(subtab === 'cotacao' || subtab === 'estudo') && (
         <div style={{ marginBottom: 20 }}>
@@ -2583,7 +3088,7 @@ function RelatorioTab({ imoveis, recibos, manutencoes }) {
         <div style={S.formSection}>Performance do Portfólio</div>
         <div style={S.kpiGrid}>
           <KPICompare label="Patrimônio" current={metrics.patrimonio} previous={metrics.prev.patrimonio} fmt={fmtR} />
-          <KPICompare label="NOI Anual" current={metrics.noiAnual} previous={metrics.prev.noiAnual} fmt={fmtR} />
+          <KPICompare label="Renda Líquida (NOI)" current={metrics.noiAnual} previous={metrics.prev.noiAnual} fmt={fmtR} />
           <KPICompare label="Receita Mensal" current={metrics.receitaMensal} previous={metrics.prev.receitaMensal} fmt={fmtR} />
           <KPICompare label="Yield" current={metrics.yieldPort} previous={metrics.prev.yieldPort} fmt={v => fmtPct(v)} />
           <KPICompare label="Ocupação" current={metrics.ocupacao} previous={metrics.prev.ocupacao} fmt={v => fmtPct(v)} />
@@ -2592,7 +3097,7 @@ function RelatorioTab({ imoveis, recibos, manutencoes }) {
 
       {/* NOI Analysis */}
       <div style={S.card}>
-        <div style={S.formSection}>NOI por Ativo</div>
+        <div style={S.formSection}>Renda Líquida por Ativo</div>
         {imoveis.length === 0 ? (
           <div style={S.emptyState}>Sem dados.</div>
         ) : (
@@ -3055,7 +3560,7 @@ function FinanceiroWrapper({ imoveis, dividas, manutencoes }) {
     <div>
       <div style={S.subtabs}>
         {[
-          { id: 'noi', label: 'NOI & Fluxo' },
+          { id: 'noi', label: 'Renda & Fluxo' },
           { id: 'divida', label: 'Dívida' },
           { id: 'capex', label: 'CAPEX' },
           { id: 'construcao', label: 'Construção & INCC' },
