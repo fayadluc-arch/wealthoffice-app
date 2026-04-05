@@ -3580,19 +3580,41 @@ function AdminTab({ clients, user, onRefresh }) {
   const [newUserRole, setNewUserRole] = useState('client');
   const [creating, setCreating] = useState(false);
 
+  const DEMO_IMOVEIS = [
+    { nome: 'Edifício Fasano Itaim', tipo: 'Apartamento', uso: 'Residencial', estagio: 'Pronto', cep: '04533-000', logradouro: 'Rua Bandeira Paulista', numero: '726', bairro: 'Itaim Bibi', cidade: 'São Paulo', uf: 'SP', area_m2: 280, quartos: 4, padrao: 'Luxo', titular: 'PF', custo_aquisicao: 6500000, data_aquisicao: '2019-03-15', valor_mercado: 8200000, status: 'Alugado', inquilino: 'João Carlos Mendonça', aluguel: 28000, contrato_inicio: '2024-01-01', contrato_fim: '2027-01-01', indice_reajuste: 'IGPM', garantia: 'Seguro Fiança', imobiliaria: 'Lopes', taxa_adm: 8, iptu_anual: 18000, condominio_mensal: 4200, seguro_anual: 3500 },
+    { nome: 'Torre Faria Lima', tipo: 'Laje Corporativa', uso: 'Comercial', estagio: 'Pronto', cep: '04538-133', logradouro: 'Av Brigadeiro Faria Lima', numero: '3477', bairro: 'Itaim Bibi', cidade: 'São Paulo', uf: 'SP', area_m2: 450, quartos: 0, padrao: 'Alto', titular: 'Holding', titular_nome: 'WO Participações', cnpj: '12.345.678/0001-90', custo_aquisicao: 11000000, data_aquisicao: '2020-06-10', valor_mercado: 14500000, status: 'Alugado', inquilino: 'Tech Solutions SA', aluguel: 95000, contrato_inicio: '2023-06-01', contrato_fim: '2028-06-01', indice_reajuste: 'IPCA', garantia: 'Caução', imobiliaria: 'JLL Brasil', taxa_adm: 5, iptu_anual: 85000, condominio_mensal: 12000, seguro_anual: 8000, divida: 3200000, parcela_mensal: 42000 },
+    { nome: 'You Now Vila Mariana', tipo: 'Apartamento', uso: 'Residencial', estagio: 'Pronto', cep: '04101-000', logradouro: 'Rua Domingos de Morais', numero: '2100', bairro: 'Vila Mariana', cidade: 'São Paulo', uf: 'SP', area_m2: 42, quartos: 1, padrao: 'Médio', titular: 'PF', custo_aquisicao: 480000, data_aquisicao: '2022-04-20', valor_mercado: 560000, status: 'Alugado', inquilino: 'Marina Silva Rocha', aluguel: 3200, contrato_inicio: '2025-05-01', contrato_fim: '2028-05-01', indice_reajuste: 'IGPM', garantia: 'Fiador', imobiliaria: 'QuintoAndar', taxa_adm: 6.9, iptu_anual: 2800, condominio_mensal: 850, seguro_anual: 600 },
+    { nome: 'Casa Alphaville Tamboré', tipo: 'Casa', uso: 'Residencial', estagio: 'Pronto', cep: '06460-000', logradouro: 'Alameda Itapecuru', numero: '320', bairro: 'Alphaville', cidade: 'Barueri', uf: 'SP', area_m2: 350, quartos: 5, padrao: 'Alto', titular: 'PF', custo_aquisicao: 3200000, data_aquisicao: '2017-08-01', valor_mercado: 4800000, status: 'Uso Próprio', iptu_anual: 12000, condominio_mensal: 2800, seguro_anual: 4500, capex_pendente: 45000, observacoes: 'Piscina aquecida, 3 vagas. CAPEX: reforma deck piscina 2026.' },
+    { nome: 'Galpão GRU Log Center', tipo: 'Galpão', uso: 'Industrial', estagio: 'Pronto', cep: '07190-000', logradouro: 'Rod Presidente Dutra', numero: 'km 225', bairro: 'Cumbica', cidade: 'Guarulhos', uf: 'SP', area_m2: 2800, quartos: 0, padrao: 'Médio', titular: 'Holding', titular_nome: 'WO Participações', cnpj: '12.345.678/0001-90', custo_aquisicao: 5600000, data_aquisicao: '2021-02-15', valor_mercado: 7200000, status: 'Alugado', inquilino: 'LogExpress Transportes', aluguel: 56000, contrato_inicio: '2024-03-01', contrato_fim: '2029-03-01', indice_reajuste: 'IPCA', garantia: 'Seguro Fiança', imobiliaria: 'Cushman & Wakefield', taxa_adm: 4, iptu_anual: 28000, seguro_anual: 12000, divida: 1800000, parcela_mensal: 28000 },
+    { nome: 'Terreno Pinheiros', tipo: 'Terreno', uso: 'Misto', estagio: 'Pronto', cep: '05417-010', logradouro: 'Rua Mourato Coelho', numero: '900', bairro: 'Pinheiros', cidade: 'São Paulo', uf: 'SP', area_m2: 600, padrao: 'Alto', titular: 'SPE', titular_nome: 'SPE Pinheiros Dev', cnpj: '34.567.890/0001-12', custo_aquisicao: 4200000, data_aquisicao: '2023-11-01', valor_mercado: 5500000, status: 'Vago', iptu_anual: 8500, seguro_anual: 2000, observacoes: 'ZM-2, CA 2.0. Projeto incorporação 15 andares. VGV potencial R$ 45M.' },
+    { nome: 'VN Nova Paulista', tipo: 'Studio', uso: 'Residencial', estagio: 'Pronto', cep: '01311-000', logradouro: 'Rua Augusta', numero: '1580', bairro: 'Consolação', cidade: 'São Paulo', uf: 'SP', area_m2: 28, quartos: 1, padrao: 'Médio', titular: 'PF', custo_aquisicao: 350000, data_aquisicao: '2023-08-15', valor_mercado: 380000, status: 'Vago', iptu_anual: 1800, condominio_mensal: 680, seguro_anual: 400, observacoes: 'Próximo metrô Consolação. Ideal Airbnb/aluguel universitário.' },
+    { nome: 'Cyrela Heritage Moema', tipo: 'Apartamento', uso: 'Residencial', estagio: 'Em Construção', cep: '04077-000', logradouro: 'Al dos Arapanés', numero: '450', bairro: 'Moema', cidade: 'São Paulo', uf: 'SP', area_m2: 180, quartos: 3, padrao: 'Alto', titular: 'PF', status: 'Em Reforma', construtora: 'Cyrela', data_entrega: '2027-06-01', pct_obra: 35, valor_contrato: 3800000, entrada_paga: 1140000, parcela_obra: 19000, indice_correcao: 'INCC-DI', observacoes: '35% obra concluída. 180m² 12º andar, vista Ibirapuera.' },
+    { nome: 'Berrini One', tipo: 'Varejo', uso: 'Comercial', estagio: 'Pronto', cep: '04571-000', logradouro: 'Rua Samuel Morse', numero: '120', bairro: 'Brooklin', cidade: 'São Paulo', uf: 'SP', area_m2: 85, padrao: 'Alto', titular: 'PF', custo_aquisicao: 950000, data_aquisicao: '2018-10-01', valor_mercado: 1200000, status: 'Alugado', inquilino: 'Silva & Associados Advogados', aluguel: 8500, contrato_inicio: '2025-01-01', contrato_fim: '2028-01-01', indice_reajuste: 'IGPM', garantia: 'Caução', imobiliaria: 'CBRE', taxa_adm: 6, iptu_anual: 5200, condominio_mensal: 1800, seguro_anual: 1200 },
+    { nome: 'Posto 6 Copacabana', tipo: 'Apartamento', uso: 'Residencial', estagio: 'Pronto', cep: '22070-001', logradouro: 'Av Atlântica', numero: '3456', bairro: 'Copacabana', cidade: 'Rio de Janeiro', uf: 'RJ', area_m2: 120, quartos: 3, padrao: 'Alto', titular: 'PF', custo_aquisicao: 2800000, data_aquisicao: '2016-05-20', valor_mercado: 3200000, status: 'Alugado', inquilino: 'Thomas Weber (expatriado)', aluguel: 12000, contrato_inicio: '2025-03-01', contrato_fim: '2027-03-01', indice_reajuste: 'IPCA', garantia: 'Seguro Fiança', imobiliaria: 'Bossa Nova Sothebys', taxa_adm: 8, iptu_anual: 9500, condominio_mensal: 3200, seguro_anual: 2800, capex_pendente: 15000 },
+  ];
+
   async function seedDemo(userId) {
     setSeedLoading(true);
     setSeedResult(null);
     try {
-      const res = await fetch('/api/seed-demo', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId }),
-      });
-      const data = await res.json();
-      setSeedResult(data.sucesso ? `${data.inseridos} imóveis demo inseridos!` : `Erro: ${data.erro}`);
-      if (data.sucesso) await onRefresh();
-    } catch (err) { setSeedResult('Erro de conexão'); }
+      const toInsert = DEMO_IMOVEIS.map(im => ({
+        ...im, user_id: userId,
+        area_m2: Number(im.area_m2) || 0, quartos: Number(im.quartos) || 0,
+        custo_aquisicao: Number(im.custo_aquisicao) || 0, valor_mercado: Number(im.valor_mercado) || 0,
+        aluguel: Number(im.aluguel) || 0, divida: Number(im.divida) || 0, parcela_mensal: Number(im.parcela_mensal) || 0,
+        iptu_anual: Number(im.iptu_anual) || 0, condominio_mensal: Number(im.condominio_mensal) || 0,
+        seguro_anual: Number(im.seguro_anual) || 0, capex_pendente: Number(im.capex_pendente) || 0,
+        taxa_adm: Number(im.taxa_adm) || 0, inadimplente: false,
+      }));
+      // Insert directly via authenticated supabase client (bypasses RLS)
+      const { data, error } = await supabase.from('imoveis').insert(toInsert).select('id');
+      if (error) {
+        setSeedResult(`Erro: ${error.message}`);
+      } else {
+        setSeedResult(`${data?.length || 0} imóveis demo inseridos!`);
+        await onRefresh();
+      }
+    } catch (err) { setSeedResult('Erro: ' + err.message); }
     setSeedLoading(false);
   }
 
@@ -3600,24 +3622,35 @@ function AdminTab({ clients, user, onRefresh }) {
     if (!newUserEmail || !newUserName) return;
     setCreating(true);
     try {
-      // Get admin's auth token to pass for profile insert
-      const { data: { session } } = await supabase.auth.getSession();
-      const adminToken = session?.access_token || '';
-      const res = await fetch('/api/admin/create-user', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newUserName, email: newUserEmail, role: newUserRole, adminToken }),
-      });
-      const data = await res.json();
-      if (data.sucesso) {
-        alert(`Usuário criado!\n\nEmail: ${data.email}\nSenha temporária: ${data.senhaTemporaria}\n\nGuarde essa senha para enviar ao cliente.`);
-        setNewUserEmail('');
-        setNewUserName('');
-        await onRefresh();
+      // Insert profile directly via authenticated admin session
+      const { data: existingProfiles } = await supabase.from('profiles').select('id').eq('email', newUserEmail).limit(1);
+      if (existingProfiles?.length > 0) {
+        // Update existing profile
+        await supabase.from('profiles').update({ name: newUserName, role: newUserRole }).eq('email', newUserEmail);
+        alert(`Perfil de ${newUserName} atualizado!`);
       } else {
-        alert('Erro: ' + (data.erro || 'Falha ao criar usuário'));
+        // Create via auth signUp (without logging out admin — use fetch directly)
+        const tempPassword = `WO_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+        const res = await fetch('/api/admin/create-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: newUserName, email: newUserEmail, role: newUserRole, password: tempPassword }),
+        });
+        const data = await res.json();
+        if (data.sucesso) {
+          // Now update profile with admin's authenticated client
+          if (data.userId) {
+            await supabase.from('profiles').upsert({ id: data.userId, email: newUserEmail, name: newUserName, role: newUserRole });
+          }
+          alert(`Cliente criado!\n\nEmail: ${newUserEmail}\nSenha: ${data.senhaTemporaria || tempPassword}\n\nEnvie esses dados ao cliente.`);
+        } else {
+          alert('Erro: ' + (data.erro || 'Falha'));
+        }
       }
-    } catch (err) { alert('Erro de conexão: ' + err.message); }
+      setNewUserEmail('');
+      setNewUserName('');
+      await onRefresh();
+    } catch (err) { alert('Erro: ' + err.message); }
     setCreating(false);
   }
 
