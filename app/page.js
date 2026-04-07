@@ -99,6 +99,8 @@ const Icons = {
   clock: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
   dollarSign: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>,
   users: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
+  checkCircle: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>,
+  bell: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>,
 };
 
 // ============================================================
@@ -730,6 +732,10 @@ export default function WealthOfficeApp() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [clients, setClients] = useState([]);
   const [selectedClient, setSelectedClient] = useState(null);
+  const [pagamentosSeenAt, setPagamentosSeenAt] = useState(() => {
+    if (typeof window === 'undefined') return 0;
+    return Number(localStorage.getItem('wo_pagamentos_seen_at') || 0);
+  });
 
   useEffect(() => {
     if (!supabase) { setAuthChecked(true); return; }
@@ -802,6 +808,37 @@ export default function WealthOfficeApp() {
     setDeleteConfirm(null);
     setSelectedId(null);
     await loadData();
+  }
+
+  async function markAsPaid(id, dataRecebimento, observacao) {
+    if (!supabase || !user) return;
+    const prec = precatorios.find(p => p.id === id);
+    if (!prec) return;
+    const dataR = dataRecebimento || new Date().toISOString().split('T')[0];
+    const { error } = await supabase.from('precatorios').update({
+      status: 'Recebido',
+      prazo_estimado: 'Recebido',
+      data_recebimento: dataR,
+    }).eq('id', id);
+    if (error) { alert('Erro ao marcar como pago: ' + error.message); return; }
+    const quem = isAdmin ? 'admin' : 'cliente';
+    const obsTxt = observacao ? ` — ${observacao}` : '';
+    await supabase.from('atividades').insert({
+      user_id: user.id,
+      precatorio_id: id,
+      tipo: 'status',
+      descricao: `Pagamento informado por ${quem}: ${prec.cedente} (${fmtBRL(prec.valor_receber)}) recebido em ${dataR}${obsTxt}`,
+      campo: 'status',
+      valor_anterior: prec.status,
+      valor_novo: 'Recebido',
+    });
+    await loadData();
+  }
+
+  function markPagamentosAsSeen() {
+    const now = Date.now();
+    setPagamentosSeenAt(now);
+    if (typeof window !== 'undefined') localStorage.setItem('wo_pagamentos_seen_at', String(now));
   }
 
   async function handleLogout() {
@@ -923,11 +960,19 @@ export default function WealthOfficeApp() {
 
   function openDetail(id) { setSelectedId(id); setTab('detalhe'); }
 
+  // Count payments confirmed since last viewed (badge on Pagamentos tab)
+  const novosPagamentos = precatorios.filter(p => {
+    if (p.status !== 'Recebido') return false;
+    const ts = p.updated_at ? new Date(p.updated_at).getTime() : 0;
+    return ts > pagamentosSeenAt;
+  }).length;
+
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: Icons.dashboard },
     { id: 'book', label: 'Book', icon: Icons.book },
     { id: 'acompanhamento', label: 'Acompanhamento', icon: Icons.search },
     { id: 'novo', label: 'Novo Precatório', icon: Icons.plus },
+    { id: 'pagamentos', label: 'Pagamentos', icon: Icons.checkCircle, badge: novosPagamentos },
     { id: 'atividades', label: 'Atividades', icon: Icons.activity },
   ];
 
@@ -973,8 +1018,15 @@ export default function WealthOfficeApp() {
 
         <nav style={S.nav}>
           {navItems.map(n => (
-            <button key={n.id} style={S.navItem(tab === n.id || (n.id === 'book' && tab === 'detalhe'))} onClick={() => { setTab(n.id); if (n.id !== 'detalhe') setSelectedId(null); }}>
-              {n.icon} {n.label}
+            <button key={n.id} style={S.navItem(tab === n.id || (n.id === 'book' && tab === 'detalhe'))} onClick={() => {
+              setTab(n.id);
+              if (n.id !== 'detalhe') setSelectedId(null);
+              if (n.id === 'pagamentos') markPagamentosAsSeen();
+            }}>
+              {n.icon} <span style={{ flex: 1 }}>{n.label}</span>
+              {n.badge > 0 && (
+                <span style={{ background: 'var(--accent)', color: '#fff', fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 10, minWidth: 18, textAlign: 'center' }}>{n.badge}</span>
+              )}
             </button>
           ))}
         </nav>
@@ -1002,6 +1054,7 @@ export default function WealthOfficeApp() {
         {tab === 'detalhe' && <DetalheTab precatorio={precatorios.find(p => p.id === selectedId)} onBack={() => setTab('book')} onSave={updatePrecatorio} onDelete={id => setDeleteConfirm(id)} atividades={atividades.filter(a => a.precatorio_id === selectedId)} />}
         {tab === 'acompanhamento' && <AcompanhamentoTab precatorios={precatorios} onDetail={openDetail} />}
         {tab === 'novo' && <NovoTab onCreate={createPrecatorio} />}
+        {tab === 'pagamentos' && <PagamentosTab precatorios={precatorios} atividades={atividades} onMarkPaid={markAsPaid} onDetail={openDetail} />}
         {tab === 'atividades' && <AtividadesTab atividades={atividades} precatorios={precatorios} />}
       </main>
 
@@ -2096,6 +2149,213 @@ function NovoTab({ onCreate }) {
 // ============================================================
 // ATIVIDADES TAB
 // ============================================================
+// ============================================================
+// PAGAMENTOS TAB — avisar pagamento + confirmados
+// ============================================================
+function PagamentosTab({ precatorios, atividades, onMarkPaid, onDetail }) {
+  const [openId, setOpenId] = useState(null);
+  const [dataRec, setDataRec] = useState('');
+  const [obs, setObs] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const pendentes = precatorios.filter(p => p.status !== 'Recebido');
+  const confirmados = precatorios
+    .filter(p => p.status === 'Recebido')
+    .sort((a, b) => {
+      const da = a.data_recebimento ? new Date(a.data_recebimento).getTime() : 0;
+      const db = b.data_recebimento ? new Date(b.data_recebimento).getTime() : 0;
+      return db - da;
+    });
+
+  const totalRecebido = confirmados.reduce((s, p) => s + Number(p.valor_receber || 0), 0);
+  const totalPendente = pendentes.reduce((s, p) => s + Number(p.valor_receber || 0), 0);
+
+  // Recent payment notifications from atividades log
+  const avisos = atividades
+    .filter(a => a.tipo === 'status' && (a.descricao || '').startsWith('Pagamento informado'))
+    .slice(0, 8);
+
+  function openForm(id) {
+    setOpenId(id);
+    setDataRec(new Date().toISOString().split('T')[0]);
+    setObs('');
+  }
+
+  function closeForm() {
+    setOpenId(null);
+    setDataRec('');
+    setObs('');
+  }
+
+  async function handleSubmit(id) {
+    setSubmitting(true);
+    await onMarkPaid(id, dataRec, obs);
+    setSubmitting(false);
+    closeForm();
+  }
+
+  return (
+    <>
+      <div style={S.header}>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', letterSpacing: '2px', textTransform: 'uppercase', marginBottom: 8 }}>Avisos de Pagamento</div>
+          <div style={S.pageTitle}>Pagamentos</div>
+          <div style={S.pageSub}>Avise quando um precatório for pago e acompanhe os recebimentos</div>
+        </div>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <span style={S.badge('var(--accent)')}>{confirmados.length} recebidos</span>
+          <span style={S.badge('var(--text-muted)')}>{pendentes.length} pendentes</span>
+        </div>
+      </div>
+
+      {/* KPIs */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 28 }}>
+        <div style={S.kpiCard(true)}>
+          <div style={S.kpiLabel}><span style={{ color: 'var(--accent)' }}>{Icons.checkCircle}</span> Total Recebido</div>
+          <div style={{ fontSize: 22, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: 'var(--accent-light)' }}>{fmtBRL(totalRecebido)}</div>
+          <div style={S.kpiSub}>{confirmados.length} pagamentos confirmados</div>
+        </div>
+        <div style={S.kpiCard(false)}>
+          <div style={S.kpiLabel}><span style={{ color: 'var(--blue)' }}>{Icons.clock}</span> A Receber</div>
+          <div style={{ fontSize: 22, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{fmtBRL(totalPendente)}</div>
+          <div style={S.kpiSub}>{pendentes.length} precatórios pendentes</div>
+        </div>
+        <div style={S.kpiCard(false)}>
+          <div style={S.kpiLabel}><span style={{ color: 'var(--orange)' }}>{Icons.bell}</span> Avisos Recentes</div>
+          <div style={{ fontSize: 22, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{avisos.length}</div>
+          <div style={S.kpiSub}>Notificações no log</div>
+        </div>
+      </div>
+
+      {/* PENDENTES — Avisar pagamento */}
+      <div style={S.card}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+          <div>
+            <div style={{ ...S.formSection, marginBottom: 4 }}>Avisar Pagamento</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Marque como pago quando o valor entrar na conta</div>
+          </div>
+        </div>
+        {pendentes.length === 0 ? (
+          <div style={{ ...S.emptyState, padding: '40px 20px' }}>
+            <div style={{ marginBottom: 12, opacity: 0.3 }}>{Icons.checkCircle}</div>
+            <div style={{ fontSize: 14, fontWeight: 600 }}>Nenhum precatório pendente</div>
+            <div style={{ fontSize: 12, marginTop: 4 }}>Todos os precatórios já foram recebidos.</div>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {pendentes.map(p => (
+              <div key={p.id} style={{ background: 'var(--bg-surface)', borderRadius: 12, border: '1px solid var(--border)', padding: '14px 18px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+                  <div style={{ flex: 1, minWidth: 0, cursor: 'pointer' }} onClick={() => onDetail(p.id)}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+                      <span style={{ fontWeight: 600, fontSize: 13.5 }}>{p.cedente}</span>
+                      <span style={S.badge(p.esfera === 'Estadual' ? 'var(--blue)' : p.esfera === 'Federal' ? 'var(--green)' : 'var(--accent)')}>{p.esfera}</span>
+                      <span style={{ fontSize: 10.5, color: STATUS_COLORS[p.status] || 'var(--text-muted)', fontWeight: 600 }}>{p.status}</span>
+                    </div>
+                    <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>vs {p.devedor} · {p.cnj || 'sem CNJ'}</div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>A Receber</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--accent-light)', fontVariantNumeric: 'tabular-nums' }}>{fmtBRL(p.valor_receber)}</div>
+                  </div>
+                  {openId !== p.id && (
+                    <button style={{ ...S.btn('primary'), padding: '9px 16px', fontSize: 12 }} onClick={() => openForm(p.id)}>
+                      {Icons.checkCircle} Marcar Pago
+                    </button>
+                  )}
+                </div>
+                {openId === p.id && (
+                  <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border)', display: 'grid', gridTemplateColumns: '180px 1fr auto auto', gap: 10, alignItems: 'end' }}>
+                    <div>
+                      <label style={S.label}>Data do recebimento</label>
+                      <input type="date" style={S.input} value={dataRec} onChange={e => setDataRec(e.target.value)} max={new Date().toISOString().split('T')[0]} />
+                    </div>
+                    <div>
+                      <label style={S.label}>Observação (opcional)</label>
+                      <input type="text" style={S.input} placeholder="Ex: Crédito em conta, parcial, etc." value={obs} onChange={e => setObs(e.target.value)} />
+                    </div>
+                    <button style={{ ...S.btn('default'), padding: '10px 16px', fontSize: 12 }} onClick={closeForm} disabled={submitting}>Cancelar</button>
+                    <button style={{ ...S.btn('primary'), padding: '10px 18px', fontSize: 12 }} onClick={() => handleSubmit(p.id)} disabled={submitting || !dataRec}>
+                      {submitting ? 'Salvando...' : 'Confirmar'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* CONFIRMADOS */}
+      <div style={S.card}>
+        <div style={{ ...S.formSection, marginBottom: 18 }}>Pagamentos Confirmados</div>
+        {confirmados.length === 0 ? (
+          <div style={{ ...S.emptyState, padding: '40px 20px' }}>
+            <div style={{ fontSize: 13 }}>Nenhum pagamento confirmado ainda.</div>
+          </div>
+        ) : (
+          <div style={{ overflow: 'auto' }}>
+            <table style={S.table}>
+              <thead>
+                <tr>
+                  <th style={S.th()}>Cedente / Devedor</th>
+                  <th style={S.th()}>CNJ</th>
+                  <th style={S.th()}>Esfera</th>
+                  <th style={S.th()}>Desembolso</th>
+                  <th style={S.th()}>Recebido</th>
+                  <th style={S.th()}>Retorno</th>
+                  <th style={S.th()}>Data</th>
+                </tr>
+              </thead>
+              <tbody>
+                {confirmados.map(p => {
+                  const ret = Number(p.retorno || 0);
+                  return (
+                    <tr key={p.id} style={S.row(true)} onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-card-hover)'} onMouseLeave={e => e.currentTarget.style.background = ''} onClick={() => onDetail(p.id)}>
+                      <td style={S.td}>
+                        <div style={{ fontWeight: 600, fontSize: 13 }}>{p.cedente}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>vs {p.devedor}</div>
+                      </td>
+                      <td style={{ ...S.td, fontFamily: "'Courier New', monospace", fontSize: 11.5 }}>{p.cnj || '—'}</td>
+                      <td style={S.td}><span style={S.badge(p.esfera === 'Estadual' ? 'var(--blue)' : p.esfera === 'Federal' ? 'var(--green)' : 'var(--accent)')}>{p.esfera}</span></td>
+                      <td style={{ ...S.td, fontVariantNumeric: 'tabular-nums', fontSize: 13 }}>{fmtBRL(p.desembolso)}</td>
+                      <td style={{ ...S.td, fontVariantNumeric: 'tabular-nums', fontSize: 13, fontWeight: 600, color: 'var(--accent-light)' }}>{fmtBRL(p.valor_receber)}</td>
+                      <td style={{ ...S.td, fontVariantNumeric: 'tabular-nums', fontSize: 13, color: ret > 0 ? 'var(--green)' : 'var(--text-muted)', fontWeight: 600 }}>{fmtPct(ret)}</td>
+                      <td style={{ ...S.td, fontSize: 12, color: 'var(--text-secondary)' }}>
+                        {p.data_recebimento ? new Date(p.data_recebimento + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* RECENT NOTIFICATIONS */}
+      {avisos.length > 0 && (
+        <div style={S.card}>
+          <div style={{ ...S.formSection, marginBottom: 18 }}>Avisos Recentes</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {avisos.map(a => (
+              <div key={a.id} style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+                <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--accent-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)', flexShrink: 0 }}>
+                  {Icons.bell}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, lineHeight: 1.5 }}>{a.descricao}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{new Date(a.created_at).toLocaleString('pt-BR')}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 function AtividadesTab({ atividades, precatorios }) {
   const colors = { criacao: 'var(--green)', edicao: 'var(--blue)', exclusao: 'var(--red)', status: 'var(--accent)' };
   const icons = { criacao: '+', edicao: '~', exclusao: '×', status: '↻' };
